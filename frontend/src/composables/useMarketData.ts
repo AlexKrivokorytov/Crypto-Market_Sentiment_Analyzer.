@@ -5,14 +5,14 @@ import { AssetMetrics, HistoricalDataPoint, SentimentArticle } from '../types/ma
 
 /**
  * Fetches and auto-refreshes the complete list of tracked assets with current price
- * and sentiment metrics. Polls the backend every 7 seconds to reflect live price ticks.
+ * and sentiment metrics. Polls the backend every 10 seconds to reflect live price ticks.
  */
 export function useAssets() {
   return useQuery<AssetMetrics[]>({
     queryKey: ['assets'],
     queryFn: () => marketApi.getAssets(),
-    refetchInterval: 7000,
-    staleTime: 6500,
+    refetchInterval: 10000,
+    staleTime: 9000,
   })
 }
 
@@ -28,15 +28,15 @@ export function useAssetById(assetId: Ref<string> | string) {
   return useQuery<AssetMetrics | null>({
     queryKey: ['asset', idRef],
     queryFn: () => marketApi.getAssetById(idRef.value),
-    refetchInterval: 7000,
-    staleTime: 6500,
+    refetchInterval: 10000,
+    staleTime: 9000,
     enabled: computed(() => !!idRef.value),
   })
 }
 
 /**
  * Fetches historical candlestick price and sentiment overlay data for a given asset
- * and timeframe. Refetches every 7 seconds to keep chart data current.
+ * and timeframe. Refetches every 45 seconds to keep chart data current.
  *
  * @param assetId - Reactive or static asset identifier string.
  * @param timeframe - Reactive or static timeframe selector (1H | 24H | 7D | 30D).
@@ -48,15 +48,15 @@ export function useHistoricalData(assetId: Ref<string> | string, timeframe: Ref<
   return useQuery<HistoricalDataPoint[]>({
     queryKey: ['historical', idRef, tfRef],
     queryFn: () => marketApi.getHistoricalData(idRef.value, tfRef.value),
-    refetchInterval: 7000,
-    staleTime: 6500,
+    refetchInterval: 45000,
+    staleTime: 40000,
     enabled: computed(() => !!idRef.value && !!tfRef.value),
   })
 }
 
 /**
  * Fetches the list of recent news articles analyzed by the LLM for a given asset.
- * Polls every 7 seconds to surface newly ingested RSS feed articles.
+ * Polls every 30 seconds to surface newly ingested RSS feed articles.
  *
  * @param assetId - Reactive or static asset identifier string.
  */
@@ -66,8 +66,8 @@ export function useSentimentArticles(assetId: Ref<string> | string) {
   return useQuery<SentimentArticle[]>({
     queryKey: ['articles', idRef],
     queryFn: () => marketApi.getArticles(idRef.value),
-    refetchInterval: 7000,
-    staleTime: 6500,
+    refetchInterval: 30000,
+    staleTime: 25000,
     enabled: computed(() => !!idRef.value),
   })
 }

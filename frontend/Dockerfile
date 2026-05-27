@@ -1,5 +1,5 @@
 # Stage 1: Build stage
-FROM node:20-alpine AS build-stage
+FROM node:22-alpine AS build-stage
 
 WORKDIR /app
 
@@ -12,7 +12,7 @@ COPY . .
 RUN npm run build
 
 # Stage 2: Production serve stage
-FROM nginx:1.25-alpine AS production-stage
+FROM nginx:alpine-slim AS production-stage
 
 # Copy Nginx server settings config
 COPY nginx.conf /etc/nginx/conf.d/default.conf

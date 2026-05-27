@@ -32,6 +32,20 @@ def _md5_hash(text: str) -> str:
     return hashlib.md5(text.encode("utf-8")).hexdigest()
 
 
+# Global reusable HTTP client to leverage connection pooling and keep-alive
+_http_client: Optional[httpx.AsyncClient] = None
+
+
+def get_http_client() -> httpx.AsyncClient:
+    """
+    Returns a shared singleton instance of AsyncClient for connection reuse.
+    """
+    global _http_client
+    if _http_client is None:
+        _http_client = httpx.AsyncClient(timeout=10.0)
+    return _http_client
+
+
 async def fetch_rss_feed(query: str) -> Optional[str]:
     """
     Retrieves the search-based RSS feed from Google News for the specified query.
@@ -40,10 +54,10 @@ async def fetch_rss_feed(query: str) -> Optional[str]:
     url = f"https://news.google.com/rss/search?q={encoded_query}&hl=en-US&gl=US&ceid=US:en"
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(url)
-            if response.status_code == 200:
-                return response.text
+        client = get_http_client()
+        response = await client.get(url)
+        if response.status_code == 200:
+            return response.text
 
         logger.warning(
             "rss_fetch_failed",
@@ -144,7 +158,7 @@ async def process_rss_feed_for_asset(asset_id: str) -> None:
     parsed_items = parse_rss_xml(xml_content)
     new_articles_count = 0
 
-    for item in parsed_items[:5]:
+    for item in parsed_items[:3]:
         article_url = item["url"]
         article_id = f"art_{_md5_hash(article_url)}"
 

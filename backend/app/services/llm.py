@@ -5,7 +5,7 @@ Service layer for LLM (LM Studio / Ollama) sentiment analysis integration.
 import json
 import logging
 import random
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import httpx
 
 from backend.app.core.config import settings
@@ -111,6 +111,20 @@ def _get_mock_sentiment(title: str, summary: str) -> Dict[str, Any]:
     }
 
 
+# Global reusable HTTP client for LLM API calls with a high timeout (60.0s) for model cold starts
+_llm_client: Optional[httpx.AsyncClient] = None
+
+
+def get_llm_client() -> httpx.AsyncClient:
+    """
+    Returns a shared singleton instance of AsyncClient for LLM queries.
+    """
+    global _llm_client
+    if _llm_client is None:
+        _llm_client = httpx.AsyncClient(timeout=60.0)
+    return _llm_client
+
+
 async def analyze_article_sentiment(
     title: str, summary: str, asset_symbol: str
 ) -> Dict[str, Any]:
@@ -146,40 +160,39 @@ async def analyze_article_sentiment(
     }
 
     try:
-        # High timeout is required for initial model compilation/loading on Ollama
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(url, json=payload)
-            if response.status_code == 200:
-                result = response.json()
-                content = result["choices"][0]["message"]["content"].strip()
+        client = get_llm_client()
+        response = await client.post(url, json=payload)
+        if response.status_code == 200:
+            result = response.json()
+            content = result["choices"][0]["message"]["content"].strip()
 
-                if content.startswith("```"):
-                    lines = content.split("\n")
-                    content = "\n".join(lines[1:-1])
+            if content.startswith("```"):
+                lines = content.split("\n")
+                content = "\n".join(lines[1:-1])
 
-                data = json.loads(content)
-                score = max(-1.0, min(1.0, float(data.get("sentimentScore", 0.0))))
+            data = json.loads(content)
+            score = max(-1.0, min(1.0, float(data.get("sentimentScore", 0.0))))
 
-                label = str(data.get("sentimentLabel", "Neutral"))
-                if label not in ("Bullish", "Bearish", "Neutral"):
-                    label = "Neutral"
+            label = str(data.get("sentimentLabel", "Neutral"))
+            if label not in ("Bullish", "Bearish", "Neutral"):
+                label = "Neutral"
 
-                confidence = max(0.0, min(1.0, float(data.get("confidence", 0.8))))
-                keywords = list(data.get("keywords", []))
-                reasoning = str(data.get("reasoning", "No explanation provided."))
+            confidence = max(0.0, min(1.0, float(data.get("confidence", 0.8))))
+            keywords = list(data.get("keywords", []))
+            reasoning = str(data.get("reasoning", "No explanation provided."))
 
-                return {
-                    "sentimentScore": score,
-                    "sentimentLabel": label,
-                    "confidence": confidence,
-                    "keywords": keywords,
-                    "reasoning": reasoning,
-                }
+            return {
+                "sentimentScore": score,
+                "sentimentLabel": label,
+                "confidence": confidence,
+                "keywords": keywords,
+                "reasoning": reasoning,
+            }
 
-            logger.warning(
-                "llm_api_non_200",
-                extra={"status_code": response.status_code},
-            )
+        logger.warning(
+            "llm_api_non_200",
+            extra={"status_code": response.status_code},
+        )
     except Exception as exc:
         logger.warning(
             "llm_api_request_failed",
