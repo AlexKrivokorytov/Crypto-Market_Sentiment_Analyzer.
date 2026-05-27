@@ -6,10 +6,10 @@ ENV PYTHONPATH=/app
 
 WORKDIR /app
 
-COPY backend/requirements.txt ./
+COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY backend ./backend
+COPY . ./backend
 
 EXPOSE 8000
 
