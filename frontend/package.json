@@ -1,0 +1,32 @@
+{
+  "name": "market-sentiment-analyzer",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@tanstack/vue-query": "^5.51.21",
+    "@vueuse/core": "^10.11.0",
+    "autoprefixer": "^10.4.20",
+    "clsx": "^2.1.1",
+    "echarts": "^5.5.1",
+    "@lucide/vue": "^1.16.0",
+    "pinia": "^2.2.2",
+    "postcss": "^8.4.41",
+    "tailwind-merge": "^2.5.2",
+    "tailwindcss": "^3.4.10",
+    "vue": "^3.4.38",
+    "vue-echarts": "^6.7.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "@vitejs/plugin-vue": "^5.0.4",
+    "typescript": "^5.2.2",
+    "vite": "^5.1.6",
+    "vue-tsc": "^2.0.6"
+  }
+}
