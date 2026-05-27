@@ -89,17 +89,20 @@ app = FastAPI(
 )
 
 origins = [
-    "http://localhost:5173",  # Vite dev server
-    "http://localhost:4173",  # Vite preview server
+    "http://localhost:5173",   # Vite dev server
+    "http://localhost:4173",   # Vite preview server
     "http://127.0.0.1:5173",
     "http://127.0.0.1:4173",
-    "http://localhost:8080",  # Docker container production port
+    "http://localhost:8080",   # Docker container production port
     "http://127.0.0.1:8080",
+    # Cloud deployments — allow all Render and Vercel subdomains
+    "https://crypto-market-sentiment-analyzer-1.onrender.com",
 ]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=r"https://.*\.onrender\.com|https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
