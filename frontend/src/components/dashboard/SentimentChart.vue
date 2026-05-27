@@ -5,10 +5,11 @@ import { CandlestickChart, BarChart, LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent, DataZoomComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
 import { computed } from 'vue'
-import { useAppStore } from '@/composables/useAppStore'
 import { useHistoricalData } from '@/composables/useMarketData'
-import { storeToRefs } from 'pinia'
 import { BarChart2 } from '@lucide/vue'
+import ErrorState from '@/components/ui/ErrorState.vue'
+import type { RouteAssetId } from '@/types/market'
+import type { Timeframe } from '@/composables/useAppStore'
 
 interface TooltipParam {
   axisValue: string
@@ -26,12 +27,22 @@ use([
   GridComponent,
   TooltipComponent,
   LegendComponent,
-  DataZoomComponent
+  DataZoomComponent,
 ])
 
-const store = useAppStore()
-const { selectedAssetId, timeframe } = storeToRefs(store)
-const { data: chartData, isLoading } = useHistoricalData(selectedAssetId, timeframe)
+const props = defineProps<{
+  /** The asset ticker ID derived from the current route parameter. */
+  assetId: RouteAssetId
+  /** The active chart timeframe selector. */
+  timeframe: Timeframe
+}>()
+
+const { data: chartData, isLoading, isError, refetch } = useHistoricalData(
+  computed(() => props.assetId),
+  computed(() => props.timeframe),
+)
+
+
 
 const chartOption = computed(() => {
   if (!chartData.value || chartData.value.length === 0) return {}
@@ -250,7 +261,7 @@ const chartOption = computed(() => {
 </script>
 
 <template>
-  <div class="glass-card p-6 rounded-3xl border border-border/40 flex flex-col h-[480px]">
+  <div class="glass-card p-6 rounded-3xl border border-border/40 flex flex-col h-[320px] sm:h-[420px] lg:h-[480px]">
     <div class="flex items-center justify-between mb-4 shrink-0">
       <div class="flex items-center gap-2 select-none">
         <div class="p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
@@ -261,9 +272,9 @@ const chartOption = computed(() => {
           <p class="text-[10px] text-muted-foreground font-semibold">Candlestick Price overlaid with LLM Sentiment Score</p>
         </div>
       </div>
-      
+
       <!-- Mini Chart Indicators -->
-      <div class="flex items-center gap-4 text-xs font-semibold">
+      <div class="hidden sm:flex items-center gap-4 text-xs font-semibold">
         <span class="flex items-center gap-1 text-muted-foreground">
           <span class="h-2 w-2 rounded bg-bullish"></span> Up Price
         </span>
@@ -284,8 +295,16 @@ const chartOption = computed(() => {
           <span class="text-xs font-semibold text-muted-foreground">Loading overlay datasets...</span>
         </div>
       </div>
-      
+
+      <ErrorState
+        v-else-if="isError"
+        title="Failed to load chart data"
+        description="Historical price data is temporarily unavailable."
+        :on-retry="() => refetch()"
+      />
+
       <v-chart v-else :option="chartOption" class="w-full h-full" autoresize />
     </div>
   </div>
 </template>
+

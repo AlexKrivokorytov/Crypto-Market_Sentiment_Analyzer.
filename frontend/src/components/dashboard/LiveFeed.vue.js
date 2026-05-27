@@ -1,13 +1,11 @@
 /// <reference types="../../../node_modules/.vue-global-types/vue_3.5_0_0_0.d.ts" />
 import { ref, computed } from 'vue';
-import { useAppStore } from '@/composables/useAppStore';
 import { useSentimentArticles } from '@/composables/useMarketData';
-import { storeToRefs } from 'pinia';
 import FeedItem from './FeedItem.vue';
+import ErrorState from '@/components/ui/ErrorState.vue';
 import { Search, Filter, Sparkles } from '@lucide/vue';
-const store = useAppStore();
-const { selectedAssetId } = storeToRefs(store);
-const { data: articles, isLoading } = useSentimentArticles(selectedAssetId);
+const props = defineProps();
+const { data: articles, isLoading, isError, refetch } = useSentimentArticles(computed(() => props.assetId));
 const searchQuery = ref('');
 const selectedFilter = ref('All');
 const filteredArticles = computed(() => {
@@ -28,7 +26,7 @@ let __VLS_directives;
 // CSS variable injection 
 // CSS variable injection end 
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-    ...{ class: "glass-card p-6 rounded-3xl border border-border/40 flex flex-col h-[650px] lg:h-full" },
+    ...{ class: "glass-card p-6 rounded-3xl border border-border/40 flex flex-col h-[450px] sm:h-[550px] lg:h-full" },
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "flex items-center justify-between mb-4 shrink-0 select-none" },
@@ -148,6 +146,20 @@ if (__VLS_ctx.isLoading) {
         });
     }
 }
+else if (__VLS_ctx.isError) {
+    /** @type {[typeof ErrorState, ]} */ ;
+    // @ts-ignore
+    const __VLS_8 = __VLS_asFunctionalComponent(ErrorState, new ErrorState({
+        title: "Failed to load news feed",
+        description: "RSS sentiment data is temporarily unavailable.",
+        onRetry: (() => __VLS_ctx.refetch()),
+    }));
+    const __VLS_9 = __VLS_8({
+        title: "Failed to load news feed",
+        description: "RSS sentiment data is temporarily unavailable.",
+        onRetry: (() => __VLS_ctx.refetch()),
+    }, ...__VLS_functionalComponentArgsRest(__VLS_8));
+}
 else if (__VLS_ctx.filteredArticles.length === 0) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "h-full flex flex-col items-center justify-center text-center text-muted-foreground p-6" },
@@ -155,15 +167,15 @@ else if (__VLS_ctx.filteredArticles.length === 0) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "h-12 w-12 rounded-full border border-dashed border-border flex items-center justify-center mb-3" },
     });
-    const __VLS_8 = {}.Filter;
+    const __VLS_11 = {}.Filter;
     /** @type {[typeof __VLS_components.Filter, ]} */ ;
     // @ts-ignore
-    const __VLS_9 = __VLS_asFunctionalComponent(__VLS_8, new __VLS_8({
+    const __VLS_12 = __VLS_asFunctionalComponent(__VLS_11, new __VLS_11({
         ...{ class: "h-5 w-5 text-muted-foreground/60" },
     }));
-    const __VLS_10 = __VLS_9({
+    const __VLS_13 = __VLS_12({
         ...{ class: "h-5 w-5 text-muted-foreground/60" },
-    }, ...__VLS_functionalComponentArgsRest(__VLS_9));
+    }, ...__VLS_functionalComponentArgsRest(__VLS_12));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({
         ...{ class: "text-xs font-bold text-foreground" },
     });
@@ -172,33 +184,33 @@ else if (__VLS_ctx.filteredArticles.length === 0) {
     });
 }
 else {
-    const __VLS_12 = {}.TransitionGroup;
+    const __VLS_15 = {}.TransitionGroup;
     /** @type {[typeof __VLS_components.TransitionGroup, typeof __VLS_components.TransitionGroup, ]} */ ;
     // @ts-ignore
-    const __VLS_13 = __VLS_asFunctionalComponent(__VLS_12, new __VLS_12({
+    const __VLS_16 = __VLS_asFunctionalComponent(__VLS_15, new __VLS_15({
         name: "feed",
         tag: "div",
         ...{ class: "space-y-4" },
     }));
-    const __VLS_14 = __VLS_13({
+    const __VLS_17 = __VLS_16({
         name: "feed",
         tag: "div",
         ...{ class: "space-y-4" },
-    }, ...__VLS_functionalComponentArgsRest(__VLS_13));
-    __VLS_15.slots.default;
+    }, ...__VLS_functionalComponentArgsRest(__VLS_16));
+    __VLS_18.slots.default;
     for (const [article] of __VLS_getVForSourceType((__VLS_ctx.filteredArticles))) {
         /** @type {[typeof FeedItem, ]} */ ;
         // @ts-ignore
-        const __VLS_16 = __VLS_asFunctionalComponent(FeedItem, new FeedItem({
+        const __VLS_19 = __VLS_asFunctionalComponent(FeedItem, new FeedItem({
             key: (article.id),
             article: (article),
         }));
-        const __VLS_17 = __VLS_16({
+        const __VLS_20 = __VLS_19({
             key: (article.id),
             article: (article),
-        }, ...__VLS_functionalComponentArgsRest(__VLS_16));
+        }, ...__VLS_functionalComponentArgsRest(__VLS_19));
     }
-    var __VLS_15;
+    var __VLS_18;
 }
 /** @type {__VLS_StyleScopedClasses['glass-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['p-6']} */ ;
@@ -207,7 +219,8 @@ else {
 /** @type {__VLS_StyleScopedClasses['border-border/40']} */ ;
 /** @type {__VLS_StyleScopedClasses['flex']} */ ;
 /** @type {__VLS_StyleScopedClasses['flex-col']} */ ;
-/** @type {__VLS_StyleScopedClasses['h-[650px]']} */ ;
+/** @type {__VLS_StyleScopedClasses['h-[450px]']} */ ;
+/** @type {__VLS_StyleScopedClasses['sm:h-[550px]']} */ ;
 /** @type {__VLS_StyleScopedClasses['lg:h-full']} */ ;
 /** @type {__VLS_StyleScopedClasses['flex']} */ ;
 /** @type {__VLS_StyleScopedClasses['items-center']} */ ;
@@ -385,19 +398,24 @@ const __VLS_self = (await import('vue')).defineComponent({
     setup() {
         return {
             FeedItem: FeedItem,
+            ErrorState: ErrorState,
             Search: Search,
             Filter: Filter,
             Sparkles: Sparkles,
             isLoading: isLoading,
+            isError: isError,
+            refetch: refetch,
             searchQuery: searchQuery,
             selectedFilter: selectedFilter,
             filteredArticles: filteredArticles,
         };
     },
+    __typeProps: {},
 });
 export default (await import('vue')).defineComponent({
     setup() {
         return {};
     },
+    __typeProps: {},
 });
 ; /* PartiallyEnd: #4569/main.vue */

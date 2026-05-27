@@ -1,7 +1,9 @@
 import { useQuery } from '@tanstack/vue-query'
-import { computed, Ref } from 'vue'
+import { computed } from 'vue'
+import type { Ref } from 'vue'
 import { marketApi } from '../services/api'
-import { AssetMetrics, HistoricalDataPoint, SentimentArticle } from '../types/market'
+import type { AssetMetrics, HistoricalDataPoint, SentimentArticle, RouteAssetId } from '../types/market'
+
 
 /**
  * Fetches and auto-refreshes the complete list of tracked assets with current price
@@ -17,31 +19,37 @@ export function useAssets() {
 }
 
 /**
- * Fetches real-time metrics for a single asset by its ID (e.g. "BTC").
- * Polling is disabled when `assetId` is empty.
+ * Fetches real-time metrics for a single asset by its ticker ID (e.g. 'BTC').
+ * Polling is disabled when `assetId` resolves to an empty string.
  *
- * @param assetId - Reactive or static asset identifier string.
+ * @param assetId - Reactive or static asset ticker (RouteAssetId | string).
+ * @returns TanStack Query result including `data`, `isLoading`, `isError`, and `refetch`.
  */
-export function useAssetById(assetId: Ref<string> | string) {
+export function useAssetById(assetId: Ref<RouteAssetId | string> | RouteAssetId | string) {
   const idRef = computed(() => (typeof assetId === 'string' ? assetId : assetId.value))
-  
+
   return useQuery<AssetMetrics | null>({
     queryKey: ['asset', idRef],
     queryFn: () => marketApi.getAssetById(idRef.value),
     refetchInterval: 10000,
     staleTime: 9000,
+    retry: 1,
     enabled: computed(() => !!idRef.value),
   })
 }
 
 /**
- * Fetches historical candlestick price and sentiment overlay data for a given asset
- * and timeframe. Refetches every 45 seconds to keep chart data current.
+ * Fetches historical OHLCV candlestick data overlaid with LLM sentiment score.
+ * Refetches every 45 seconds to keep the chart aligned with the current price.
  *
- * @param assetId - Reactive or static asset identifier string.
- * @param timeframe - Reactive or static timeframe selector (1H | 24H | 7D | 30D).
+ * @param assetId - Reactive or static asset ticker.
+ * @param timeframe - Reactive or static timeframe selector ('1H' | '24H' | '7D' | '30D').
+ * @returns TanStack Query result including `data`, `isLoading`, `isError`, and `refetch`.
  */
-export function useHistoricalData(assetId: Ref<string> | string, timeframe: Ref<string> | string) {
+export function useHistoricalData(
+  assetId: Ref<RouteAssetId | string> | RouteAssetId | string,
+  timeframe: Ref<string> | string,
+) {
   const idRef = computed(() => (typeof assetId === 'string' ? assetId : assetId.value))
   const tfRef = computed(() => (typeof timeframe === 'string' ? timeframe : timeframe.value))
 
@@ -50,17 +58,19 @@ export function useHistoricalData(assetId: Ref<string> | string, timeframe: Ref<
     queryFn: () => marketApi.getHistoricalData(idRef.value, tfRef.value),
     refetchInterval: 45000,
     staleTime: 40000,
+    retry: 1,
     enabled: computed(() => !!idRef.value && !!tfRef.value),
   })
 }
 
 /**
- * Fetches the list of recent news articles analyzed by the LLM for a given asset.
- * Polls every 30 seconds to surface newly ingested RSS feed articles.
+ * Fetches the most recent RSS-ingested news articles with LLM sentiment scores
+ * for a given asset. Polls every 30 seconds to surface newly processed articles.
  *
- * @param assetId - Reactive or static asset identifier string.
+ * @param assetId - Reactive or static asset ticker.
+ * @returns TanStack Query result including `data`, `isLoading`, `isError`, and `refetch`.
  */
-export function useSentimentArticles(assetId: Ref<string> | string) {
+export function useSentimentArticles(assetId: Ref<RouteAssetId | string> | RouteAssetId | string) {
   const idRef = computed(() => (typeof assetId === 'string' ? assetId : assetId.value))
 
   return useQuery<SentimentArticle[]>({
@@ -68,6 +78,7 @@ export function useSentimentArticles(assetId: Ref<string> | string) {
     queryFn: () => marketApi.getArticles(idRef.value),
     refetchInterval: 30000,
     staleTime: 25000,
+    retry: 1,
     enabled: computed(() => !!idRef.value),
   })
 }

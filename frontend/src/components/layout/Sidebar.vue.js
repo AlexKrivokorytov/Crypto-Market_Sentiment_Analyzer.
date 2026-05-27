@@ -1,29 +1,39 @@
 /// <reference types="../../../node_modules/.vue-global-types/vue_3.5_0_0_0.d.ts" />
+import { computed } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import { useAppStore } from '@/composables/useAppStore';
 import { useAssets, useBackendConfig } from '@/composables/useMarketData';
 import { Activity, Cpu, TrendingDown, TrendingUp } from '@lucide/vue';
 import { storeToRefs } from 'pinia';
+const router = useRouter();
+const route = useRoute();
 const store = useAppStore();
-const { selectedAssetId, sidebarCollapsed } = storeToRefs(store);
+const { sidebarCollapsed, mobileMenuOpen } = storeToRefs(store);
+/** The currently active asset ticker, derived from the URL. */
+const selectedAssetId = computed(() => route.params.id);
 const { data: assets, isLoading } = useAssets();
 const { data: config } = useBackendConfig();
 const formatCurrency = (val, symbol) => {
     const options = symbol === 'AAPL'
         ? { minimumFractionDigits: 2, maximumFractionDigits: 2 }
         : { minimumFractionDigits: 0, maximumFractionDigits: 2 };
-    return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD',
-        ...options
-    }).format(val);
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', ...options }).format(val);
+};
+/** Navigates to the selected asset route and closes the mobile Drawer. */
+const selectAsset = (assetId) => {
+    router.push(`/asset/${assetId}`);
+    store.closeMobileMenu();
 };
 debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_ctx = {};
 let __VLS_components;
 let __VLS_directives;
 __VLS_asFunctionalElement(__VLS_intrinsicElements.aside, __VLS_intrinsicElements.aside)({
-    ...{ class: "glass-panel border-r border-border/40 h-screen transition-all duration-300 ease-in-out flex flex-col z-20" },
-    ...{ class: ([__VLS_ctx.sidebarCollapsed ? 'w-20' : 'w-72']) },
+    ...{ class: "\u0067\u006c\u0061\u0073\u0073\u002d\u0070\u0061\u006e\u0065\u006c\u0020\u0062\u006f\u0072\u0064\u0065\u0072\u002d\u0072\u0020\u0062\u006f\u0072\u0064\u0065\u0072\u002d\u0062\u006f\u0072\u0064\u0065\u0072\u002f\u0034\u0030\u0020\u0068\u002d\u0073\u0063\u0072\u0065\u0065\u006e\u0020\u0074\u0072\u0061\u006e\u0073\u0069\u0074\u0069\u006f\u006e\u002d\u0061\u006c\u006c\u0020\u0064\u0075\u0072\u0061\u0074\u0069\u006f\u006e\u002d\u0033\u0030\u0030\u0020\u0065\u0061\u0073\u0065\u002d\u0069\u006e\u002d\u006f\u0075\u0074\u0020\u0066\u006c\u0065\u0078\u0020\u0066\u006c\u0065\u0078\u002d\u0063\u006f\u006c\u0020\u007a\u002d\u0034\u0030\u000a\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0020\u0066\u0069\u0078\u0065\u0064\u0020\u0069\u006e\u0073\u0065\u0074\u002d\u0079\u002d\u0030\u0020\u006c\u0065\u0066\u0074\u002d\u0030\u0020\u006c\u0067\u003a\u0072\u0065\u006c\u0061\u0074\u0069\u0076\u0065\u0020\u006c\u0067\u003a\u007a\u002d\u0032\u0030" },
+    ...{ class: ([
+            __VLS_ctx.sidebarCollapsed ? 'lg:w-20' : 'lg:w-72',
+            __VLS_ctx.mobileMenuOpen ? 'w-72 translate-x-0' : '-translate-x-full lg:translate-x-0'
+        ]) },
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "h-16 flex items-center px-6 border-b border-border/40 gap-3 overflow-hidden select-none" },
@@ -76,7 +86,7 @@ else {
             ...{ onClick: (...[$event]) => {
                     if (!!(__VLS_ctx.isLoading))
                         return;
-                    __VLS_ctx.store.setAsset(asset.id);
+                    __VLS_ctx.selectAsset(asset.id);
                 } },
             key: (asset.id),
             ...{ class: "w-full text-left p-3 rounded-xl flex items-center transition-all duration-200 border group" },
@@ -185,7 +195,12 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.
 /** @type {__VLS_StyleScopedClasses['ease-in-out']} */ ;
 /** @type {__VLS_StyleScopedClasses['flex']} */ ;
 /** @type {__VLS_StyleScopedClasses['flex-col']} */ ;
-/** @type {__VLS_StyleScopedClasses['z-20']} */ ;
+/** @type {__VLS_StyleScopedClasses['z-40']} */ ;
+/** @type {__VLS_StyleScopedClasses['fixed']} */ ;
+/** @type {__VLS_StyleScopedClasses['inset-y-0']} */ ;
+/** @type {__VLS_StyleScopedClasses['left-0']} */ ;
+/** @type {__VLS_StyleScopedClasses['lg:relative']} */ ;
+/** @type {__VLS_StyleScopedClasses['lg:z-20']} */ ;
 /** @type {__VLS_StyleScopedClasses['h-16']} */ ;
 /** @type {__VLS_StyleScopedClasses['flex']} */ ;
 /** @type {__VLS_StyleScopedClasses['items-center']} */ ;
@@ -359,13 +374,14 @@ const __VLS_self = (await import('vue')).defineComponent({
             Cpu: Cpu,
             TrendingDown: TrendingDown,
             TrendingUp: TrendingUp,
-            store: store,
-            selectedAssetId: selectedAssetId,
             sidebarCollapsed: sidebarCollapsed,
+            mobileMenuOpen: mobileMenuOpen,
+            selectedAssetId: selectedAssetId,
             assets: assets,
             isLoading: isLoading,
             config: config,
             formatCurrency: formatCurrency,
+            selectAsset: selectAsset,
         };
     },
 });

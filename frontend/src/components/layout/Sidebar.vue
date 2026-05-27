@@ -1,31 +1,45 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useAppStore } from '@/composables/useAppStore'
 import { useAssets, useBackendConfig } from '@/composables/useMarketData'
 import { Activity, Cpu, TrendingDown, TrendingUp } from '@lucide/vue'
 import { storeToRefs } from 'pinia'
 
+const router = useRouter()
+const route = useRoute()
 const store = useAppStore()
-const { selectedAssetId, sidebarCollapsed } = storeToRefs(store)
+const { sidebarCollapsed, mobileMenuOpen } = storeToRefs(store)
+
+/** The currently active asset ticker, derived from the URL. */
+const selectedAssetId = computed(() => route.params.id as string)
 
 const { data: assets, isLoading } = useAssets()
 const { data: config } = useBackendConfig()
 
 const formatCurrency = (val: number, symbol: string) => {
-  const options = symbol === 'AAPL' 
-    ? { minimumFractionDigits: 2, maximumFractionDigits: 2 }
-    : { minimumFractionDigits: 0, maximumFractionDigits: 2 };
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    ...options
-  }).format(val)
+  const options =
+    symbol === 'AAPL'
+      ? { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+      : { minimumFractionDigits: 0, maximumFractionDigits: 2 }
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', ...options }).format(val)
+}
+
+/** Navigates to the selected asset route and closes the mobile Drawer. */
+const selectAsset = (assetId: string): void => {
+  router.push(`/asset/${assetId}`)
+  store.closeMobileMenu()
 }
 </script>
 
 <template>
   <aside
-    class="glass-panel border-r border-border/40 h-screen transition-all duration-300 ease-in-out flex flex-col z-20"
-    :class="[sidebarCollapsed ? 'w-20' : 'w-72']"
+    class="glass-panel border-r border-border/40 h-screen transition-all duration-300 ease-in-out flex flex-col z-40
+           fixed inset-y-0 left-0 lg:relative lg:z-20"
+    :class="[
+      sidebarCollapsed ? 'lg:w-20' : 'lg:w-72',
+      mobileMenuOpen ? 'w-72 translate-x-0' : '-translate-x-full lg:translate-x-0'
+    ]"
   >
     <!-- Logo & Brand Header -->
     <div class="h-16 flex items-center px-6 border-b border-border/40 gap-3 overflow-hidden select-none">
@@ -57,7 +71,7 @@ const formatCurrency = (val: number, symbol: string) => {
         v-else
         v-for="asset in assets"
         :key="asset.id"
-        @click="store.setAsset(asset.id)"
+        @click="selectAsset(asset.id)"
         class="w-full text-left p-3 rounded-xl flex items-center transition-all duration-200 border group"
         :class="[
           selectedAssetId === asset.id

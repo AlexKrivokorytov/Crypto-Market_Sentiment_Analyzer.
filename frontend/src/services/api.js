@@ -1,76 +1,77 @@
-const BASE_URL = 'http://localhost:8000/api/v1';
+const BASE_URL = `${import.meta.env.VITE_API_URL ?? 'http://localhost:8000'}/api/v1`;
+/**
+ * Centralized fetch wrapper that normalizes all HTTP error responses into thrown
+ * Error instances, making TanStack Query's `isError` flag work reliably.
+ *
+ * @param url - Absolute URL to request.
+ * @returns Parsed JSON body typed as T.
+ * @throws Error with status code and URL on any non-2xx response.
+ */
+async function apiFetch(url) {
+    const response = await fetch(url);
+    if (!response.ok) {
+        throw new Error(`API request failed: status=${response.status} url=${url}`);
+    }
+    return response.json();
+}
 export const marketApi = {
     /**
-     * Fetches the list of all supported assets with their current metrics.
+     * Fetches the list of all supported assets with their current price and sentiment metrics.
      *
      * @returns A promise resolving to an array of AssetMetrics.
-     * @throws An error if the request fails.
+     * @throws Error if the network request fails or the server returns a non-2xx status.
      */
-    async getAssets() {
-        const response = await fetch(`${BASE_URL}/assets`);
-        if (!response.ok) {
-            throw new Error(`Failed to fetch assets: status=${response.status}`);
-        }
-        return response.json();
+    getAssets() {
+        return apiFetch(`${BASE_URL}/assets`);
     },
     /**
-     * Fetches current metrics (price, daily range, sentiment score) for a single asset.
+     * Fetches current price and sentiment metrics for a single asset by its ticker ID.
+     * Returns null when the backend responds with 404 (asset not found).
      *
-     * @param id The unique identifier of the asset (e.g. BTC).
-     * @returns A promise resolving to the AssetMetrics or null if not found.
-     * @throws An error if the request fails.
+     * @param id - Ticker symbol of the asset (e.g. 'BTC', 'ETH').
+     * @returns A promise resolving to AssetMetrics or null if the asset is not found.
+     * @throws Error if the network request fails or the server returns a non-2xx, non-404 status.
      */
     async getAssetById(id) {
         const response = await fetch(`${BASE_URL}/assets/${id}/metrics`);
-        if (response.status === 404) {
+        if (response.status === 404)
             return null;
-        }
         if (!response.ok) {
-            throw new Error(`Failed to fetch asset metrics: id=${id} status=${response.status}`);
+            throw new Error(`API request failed: status=${response.status} url=${BASE_URL}/assets/${id}/metrics`);
         }
         return response.json();
     },
     /**
-     * Fetches historical candlestick price data overlaid with sentiment score over time.
+     * Fetches historical OHLCV candlestick data overlaid with LLM sentiment score for
+     * the given asset and timeframe.
      *
-     * @param assetId The unique identifier of the asset (e.g. BTC).
-     * @param timeframe The charts timeframe (1H, 24H, 7D, 30D).
-     * @returns A promise resolving to an array of HistoricalDataPoints.
-     * @throws An error if the request fails.
+     * @param assetId - Ticker symbol of the asset (e.g. 'BTC').
+     * @param timeframe - Chart timeframe selector ('1H' | '24H' | '7D' | '30D').
+     * @returns A promise resolving to an array of HistoricalDataPoint objects.
+     * @throws Error if the network request fails or the server returns a non-2xx status.
      */
-    async getHistoricalData(assetId, timeframe) {
-        const response = await fetch(`${BASE_URL}/assets/${assetId}/historical?timeframe=${timeframe}`);
-        if (!response.ok) {
-            throw new Error(`Failed to fetch historical data: id=${assetId} timeframe=${timeframe} status=${response.status}`);
-        }
-        return response.json();
+    getHistoricalData(assetId, timeframe) {
+        return apiFetch(`${BASE_URL}/assets/${assetId}/historical?timeframe=${timeframe}`);
     },
     /**
-     * Fetches the recent news articles processed by the LLM for a single asset.
+     * Fetches the most recent news articles processed by the LLM sentiment engine
+     * for a given asset.
      *
-     * @param assetId The unique identifier of the asset (e.g. BTC).
-     * @returns A promise resolving to an array of SentimentArticles.
-     * @throws An error if the request fails.
+     * @param assetId - Ticker symbol of the asset (e.g. 'BTC').
+     * @returns A promise resolving to an array of SentimentArticle objects.
+     * @throws Error if the network request fails or the server returns a non-2xx status.
      */
-    async getArticles(assetId) {
-        const response = await fetch(`${BASE_URL}/assets/${assetId}/sentiment`);
-        if (!response.ok) {
-            throw new Error(`Failed to fetch articles: id=${assetId} status=${response.status}`);
-        }
-        return response.json();
+    getArticles(assetId) {
+        return apiFetch(`${BASE_URL}/assets/${assetId}/sentiment`);
     },
     /**
-     * Fetches the backend's active LLM configuration — model name and whether a live
-     * endpoint is configured. Used to display status in the sidebar footer.
+     * Fetches backend runtime configuration: active LLM model name and whether a live
+     * LLM API endpoint is configured. Result is meant to be cached indefinitely (no polling).
      *
-     * @returns A promise resolving to llm_configured flag and llm_model name.
-     * @throws An error if the request fails.
+     * @returns A promise resolving to the LLM configuration object.
+     * @throws Error if the network request fails or the server returns a non-2xx status.
      */
-    async getConfig() {
-        const response = await fetch(`${BASE_URL}/config`);
-        if (!response.ok) {
-            throw new Error(`Failed to fetch config: status=${response.status}`);
-        }
-        return response.json();
-    }
+    getConfig() {
+        return apiFetch(`${BASE_URL}/config`);
+    },
 };

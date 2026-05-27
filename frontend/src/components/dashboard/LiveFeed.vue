@@ -1,15 +1,20 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { useAppStore } from '@/composables/useAppStore'
 import { useSentimentArticles } from '@/composables/useMarketData'
-import { storeToRefs } from 'pinia'
+
 import FeedItem from './FeedItem.vue'
+import ErrorState from '@/components/ui/ErrorState.vue'
 import { Search, Filter, Sparkles } from '@lucide/vue'
+import type { RouteAssetId } from '@/types/market'
 
-const store = useAppStore()
-const { selectedAssetId } = storeToRefs(store)
+const props = defineProps<{
+  /** The asset ticker ID derived from the current route parameter. */
+  assetId: RouteAssetId
+}>()
 
-const { data: articles, isLoading } = useSentimentArticles(selectedAssetId)
+const { data: articles, isLoading, isError, refetch } = useSentimentArticles(computed(() => props.assetId))
+
+
 
 const searchQuery = ref('')
 const selectedFilter = ref<'All' | 'Bullish' | 'Neutral' | 'Bearish'>('All')
@@ -30,7 +35,7 @@ const filteredArticles = computed(() => {
 </script>
 
 <template>
-  <div class="glass-card p-6 rounded-3xl border border-border/40 flex flex-col h-[650px] lg:h-full">
+  <div class="glass-card p-6 rounded-3xl border border-border/40 flex flex-col h-[450px] sm:h-[550px] lg:h-full">
     <!-- Header with Ticker -->
     <div class="flex items-center justify-between mb-4 shrink-0 select-none">
       <div class="flex items-center gap-2">
@@ -109,7 +114,16 @@ const filteredArticles = computed(() => {
         </div>
       </div>
 
+      <!-- Error state -->
+      <ErrorState
+        v-else-if="isError"
+        title="Failed to load news feed"
+        description="RSS sentiment data is temporarily unavailable."
+        :on-retry="() => refetch()"
+      />
+
       <!-- Empty State -->
+
       <div
         v-else-if="filteredArticles.length === 0"
         class="h-full flex flex-col items-center justify-center text-center text-muted-foreground p-6"

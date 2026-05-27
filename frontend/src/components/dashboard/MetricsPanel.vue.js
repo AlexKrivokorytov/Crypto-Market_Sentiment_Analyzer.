@@ -1,11 +1,10 @@
 /// <reference types="../../../node_modules/.vue-global-types/vue_3.5_0_0_0.d.ts" />
-import { useAppStore } from '@/composables/useAppStore';
 import { useAssetById } from '@/composables/useMarketData';
 import { ArrowUpRight, ArrowDownRight, DollarSign, Activity, Percent, Layers } from '@lucide/vue';
-import { storeToRefs } from 'pinia';
-const store = useAppStore();
-const { selectedAssetId } = storeToRefs(store);
-const { data: asset, isLoading } = useAssetById(selectedAssetId);
+import ErrorState from '@/components/ui/ErrorState.vue';
+import { computed } from 'vue';
+const props = defineProps();
+const { data: asset, isLoading, isError, refetch } = useAssetById(computed(() => props.assetId));
 const formatCurrency = (val, symbol) => {
     const options = symbol === 'AAPL'
         ? { minimumFractionDigits: 2, maximumFractionDigits: 2 }
@@ -47,7 +46,7 @@ let __VLS_directives;
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" },
 });
-if (__VLS_ctx.isLoading || !__VLS_ctx.asset) {
+if (__VLS_ctx.isLoading) {
     for (const [i] of __VLS_getVForSourceType((4))) {
         __VLS_asFunctionalElement(__VLS_intrinsicElements.div)({
             key: (i),
@@ -55,7 +54,24 @@ if (__VLS_ctx.isLoading || !__VLS_ctx.asset) {
         });
     }
 }
-else {
+else if (__VLS_ctx.isError) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "col-span-full" },
+    });
+    /** @type {[typeof ErrorState, ]} */ ;
+    // @ts-ignore
+    const __VLS_0 = __VLS_asFunctionalComponent(ErrorState, new ErrorState({
+        title: "Failed to load asset metrics",
+        description: "The backend may be starting up or temporarily unavailable.",
+        onRetry: (() => __VLS_ctx.refetch()),
+    }));
+    const __VLS_1 = __VLS_0({
+        title: "Failed to load asset metrics",
+        description: "The backend may be starting up or temporarily unavailable.",
+        onRetry: (() => __VLS_ctx.refetch()),
+    }, ...__VLS_functionalComponentArgsRest(__VLS_0));
+}
+else if (__VLS_ctx.asset) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "glass-card p-5 rounded-2xl border border-border/40 flex flex-col justify-between relative overflow-hidden group" },
     });
@@ -71,15 +87,15 @@ else {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "h-8 w-8 rounded-lg bg-muted flex items-center justify-center border border-border/50 text-muted-foreground group-hover:text-primary transition-colors" },
     });
-    const __VLS_0 = {}.DollarSign;
+    const __VLS_3 = {}.DollarSign;
     /** @type {[typeof __VLS_components.DollarSign, ]} */ ;
     // @ts-ignore
-    const __VLS_1 = __VLS_asFunctionalComponent(__VLS_0, new __VLS_0({
+    const __VLS_4 = __VLS_asFunctionalComponent(__VLS_3, new __VLS_3({
         ...{ class: "h-4 w-4" },
     }));
-    const __VLS_2 = __VLS_1({
+    const __VLS_5 = __VLS_4({
         ...{ class: "h-4 w-4" },
-    }, ...__VLS_functionalComponentArgsRest(__VLS_1));
+    }, ...__VLS_functionalComponentArgsRest(__VLS_4));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "mt-2 flex flex-col" },
     });
@@ -91,14 +107,14 @@ else {
         ...{ class: "text-xs flex items-center font-semibold mt-1" },
         ...{ class: ([__VLS_ctx.asset.change24h >= 0 ? 'text-bullish' : 'text-bearish']) },
     });
-    const __VLS_4 = ((__VLS_ctx.asset.change24h >= 0 ? __VLS_ctx.ArrowUpRight : __VLS_ctx.ArrowDownRight));
+    const __VLS_7 = ((__VLS_ctx.asset.change24h >= 0 ? __VLS_ctx.ArrowUpRight : __VLS_ctx.ArrowDownRight));
     // @ts-ignore
-    const __VLS_5 = __VLS_asFunctionalComponent(__VLS_4, new __VLS_4({
+    const __VLS_8 = __VLS_asFunctionalComponent(__VLS_7, new __VLS_7({
         ...{ class: "h-4 w-4 mr-0.5 shrink-0" },
     }));
-    const __VLS_6 = __VLS_5({
+    const __VLS_9 = __VLS_8({
         ...{ class: "h-4 w-4 mr-0.5 shrink-0" },
-    }, ...__VLS_functionalComponentArgsRest(__VLS_5));
+    }, ...__VLS_functionalComponentArgsRest(__VLS_8));
     (__VLS_ctx.asset.change24h >= 0 ? '+' : '');
     (__VLS_ctx.asset.change24h);
     __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
@@ -123,15 +139,15 @@ else {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "h-8 w-8 rounded-lg bg-muted flex items-center justify-center border border-border/50 text-muted-foreground" },
     });
-    const __VLS_8 = {}.Activity;
+    const __VLS_11 = {}.Activity;
     /** @type {[typeof __VLS_components.Activity, ]} */ ;
     // @ts-ignore
-    const __VLS_9 = __VLS_asFunctionalComponent(__VLS_8, new __VLS_8({
+    const __VLS_12 = __VLS_asFunctionalComponent(__VLS_11, new __VLS_11({
         ...{ class: "h-4 w-4" },
     }));
-    const __VLS_10 = __VLS_9({
+    const __VLS_13 = __VLS_12({
         ...{ class: "h-4 w-4" },
-    }, ...__VLS_functionalComponentArgsRest(__VLS_9));
+    }, ...__VLS_functionalComponentArgsRest(__VLS_12));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "mt-2 flex flex-col" },
     });
@@ -171,15 +187,15 @@ else {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "h-8 w-8 rounded-lg bg-muted flex items-center justify-center border border-border/50 text-muted-foreground" },
     });
-    const __VLS_12 = {}.Percent;
+    const __VLS_15 = {}.Percent;
     /** @type {[typeof __VLS_components.Percent, ]} */ ;
     // @ts-ignore
-    const __VLS_13 = __VLS_asFunctionalComponent(__VLS_12, new __VLS_12({
+    const __VLS_16 = __VLS_asFunctionalComponent(__VLS_15, new __VLS_15({
         ...{ class: "h-4 w-4" },
     }));
-    const __VLS_14 = __VLS_13({
+    const __VLS_17 = __VLS_16({
         ...{ class: "h-4 w-4" },
-    }, ...__VLS_functionalComponentArgsRest(__VLS_13));
+    }, ...__VLS_functionalComponentArgsRest(__VLS_16));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "mt-2 flex flex-col" },
     });
@@ -218,15 +234,15 @@ else {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "h-8 w-8 rounded-lg bg-muted flex items-center justify-center border border-border/50 text-muted-foreground" },
     });
-    const __VLS_16 = {}.Layers;
+    const __VLS_19 = {}.Layers;
     /** @type {[typeof __VLS_components.Layers, ]} */ ;
     // @ts-ignore
-    const __VLS_17 = __VLS_asFunctionalComponent(__VLS_16, new __VLS_16({
+    const __VLS_20 = __VLS_asFunctionalComponent(__VLS_19, new __VLS_19({
         ...{ class: "h-4 w-4" },
     }));
-    const __VLS_18 = __VLS_17({
+    const __VLS_21 = __VLS_20({
         ...{ class: "h-4 w-4" },
-    }, ...__VLS_functionalComponentArgsRest(__VLS_17));
+    }, ...__VLS_functionalComponentArgsRest(__VLS_20));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "mt-2 flex flex-col" },
     });
@@ -249,6 +265,7 @@ else {
 /** @type {__VLS_StyleScopedClasses['border-border/30']} */ ;
 /** @type {__VLS_StyleScopedClasses['rounded-2xl']} */ ;
 /** @type {__VLS_StyleScopedClasses['animate-pulse']} */ ;
+/** @type {__VLS_StyleScopedClasses['col-span-full']} */ ;
 /** @type {__VLS_StyleScopedClasses['glass-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['p-5']} */ ;
 /** @type {__VLS_StyleScopedClasses['rounded-2xl']} */ ;
@@ -483,18 +500,23 @@ const __VLS_self = (await import('vue')).defineComponent({
             Activity: Activity,
             Percent: Percent,
             Layers: Layers,
+            ErrorState: ErrorState,
             asset: asset,
             isLoading: isLoading,
+            isError: isError,
+            refetch: refetch,
             formatCurrency: formatCurrency,
             formatVolume: formatVolume,
             getRangePercentage: getRangePercentage,
             getSentimentLabel: getSentimentLabel,
         };
     },
+    __typeProps: {},
 });
 export default (await import('vue')).defineComponent({
     setup() {
         return {};
     },
+    __typeProps: {},
 });
 ; /* PartiallyEnd: #4569/main.vue */

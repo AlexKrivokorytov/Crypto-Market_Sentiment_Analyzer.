@@ -5,10 +5,9 @@ import { CandlestickChart, BarChart, LineChart } from 'echarts/charts';
 import { GridComponent, TooltipComponent, LegendComponent, DataZoomComponent } from 'echarts/components';
 import VChart from 'vue-echarts';
 import { computed } from 'vue';
-import { useAppStore } from '@/composables/useAppStore';
 import { useHistoricalData } from '@/composables/useMarketData';
-import { storeToRefs } from 'pinia';
 import { BarChart2 } from '@lucide/vue';
+import ErrorState from '@/components/ui/ErrorState.vue';
 // Register ECharts modules
 use([
     CanvasRenderer,
@@ -18,11 +17,10 @@ use([
     GridComponent,
     TooltipComponent,
     LegendComponent,
-    DataZoomComponent
+    DataZoomComponent,
 ]);
-const store = useAppStore();
-const { selectedAssetId, timeframe } = storeToRefs(store);
-const { data: chartData, isLoading } = useHistoricalData(selectedAssetId, timeframe);
+const props = defineProps();
+const { data: chartData, isLoading, isError, refetch } = useHistoricalData(computed(() => props.assetId), computed(() => props.timeframe));
 const chartOption = computed(() => {
     if (!chartData.value || chartData.value.length === 0)
         return {};
@@ -239,7 +237,7 @@ const __VLS_ctx = {};
 let __VLS_components;
 let __VLS_directives;
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-    ...{ class: "glass-card p-6 rounded-3xl border border-border/40 flex flex-col h-[480px]" },
+    ...{ class: "glass-card p-6 rounded-3xl border border-border/40 flex flex-col h-[320px] sm:h-[420px] lg:h-[480px]" },
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "flex items-center justify-between mb-4 shrink-0" },
@@ -267,7 +265,7 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)(
     ...{ class: "text-[10px] text-muted-foreground font-semibold" },
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-    ...{ class: "flex items-center gap-4 text-xs font-semibold" },
+    ...{ class: "hidden sm:flex items-center gap-4 text-xs font-semibold" },
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
     ...{ class: "flex items-center gap-1 text-muted-foreground" },
@@ -304,20 +302,34 @@ if (__VLS_ctx.isLoading) {
         ...{ class: "text-xs font-semibold text-muted-foreground" },
     });
 }
+else if (__VLS_ctx.isError) {
+    /** @type {[typeof ErrorState, ]} */ ;
+    // @ts-ignore
+    const __VLS_4 = __VLS_asFunctionalComponent(ErrorState, new ErrorState({
+        title: "Failed to load chart data",
+        description: "Historical price data is temporarily unavailable.",
+        onRetry: (() => __VLS_ctx.refetch()),
+    }));
+    const __VLS_5 = __VLS_4({
+        title: "Failed to load chart data",
+        description: "Historical price data is temporarily unavailable.",
+        onRetry: (() => __VLS_ctx.refetch()),
+    }, ...__VLS_functionalComponentArgsRest(__VLS_4));
+}
 else {
-    const __VLS_4 = {}.VChart;
+    const __VLS_7 = {}.VChart;
     /** @type {[typeof __VLS_components.VChart, typeof __VLS_components.vChart, ]} */ ;
     // @ts-ignore
-    const __VLS_5 = __VLS_asFunctionalComponent(__VLS_4, new __VLS_4({
+    const __VLS_8 = __VLS_asFunctionalComponent(__VLS_7, new __VLS_7({
         option: (__VLS_ctx.chartOption),
         ...{ class: "w-full h-full" },
         autoresize: true,
     }));
-    const __VLS_6 = __VLS_5({
+    const __VLS_9 = __VLS_8({
         option: (__VLS_ctx.chartOption),
         ...{ class: "w-full h-full" },
         autoresize: true,
-    }, ...__VLS_functionalComponentArgsRest(__VLS_5));
+    }, ...__VLS_functionalComponentArgsRest(__VLS_8));
 }
 /** @type {__VLS_StyleScopedClasses['glass-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['p-6']} */ ;
@@ -326,7 +338,9 @@ else {
 /** @type {__VLS_StyleScopedClasses['border-border/40']} */ ;
 /** @type {__VLS_StyleScopedClasses['flex']} */ ;
 /** @type {__VLS_StyleScopedClasses['flex-col']} */ ;
-/** @type {__VLS_StyleScopedClasses['h-[480px]']} */ ;
+/** @type {__VLS_StyleScopedClasses['h-[320px]']} */ ;
+/** @type {__VLS_StyleScopedClasses['sm:h-[420px]']} */ ;
+/** @type {__VLS_StyleScopedClasses['lg:h-[480px]']} */ ;
 /** @type {__VLS_StyleScopedClasses['flex']} */ ;
 /** @type {__VLS_StyleScopedClasses['items-center']} */ ;
 /** @type {__VLS_StyleScopedClasses['justify-between']} */ ;
@@ -350,7 +364,8 @@ else {
 /** @type {__VLS_StyleScopedClasses['text-[10px]']} */ ;
 /** @type {__VLS_StyleScopedClasses['text-muted-foreground']} */ ;
 /** @type {__VLS_StyleScopedClasses['font-semibold']} */ ;
-/** @type {__VLS_StyleScopedClasses['flex']} */ ;
+/** @type {__VLS_StyleScopedClasses['hidden']} */ ;
+/** @type {__VLS_StyleScopedClasses['sm:flex']} */ ;
 /** @type {__VLS_StyleScopedClasses['items-center']} */ ;
 /** @type {__VLS_StyleScopedClasses['gap-4']} */ ;
 /** @type {__VLS_StyleScopedClasses['text-xs']} */ ;
@@ -414,14 +429,19 @@ const __VLS_self = (await import('vue')).defineComponent({
         return {
             VChart: VChart,
             BarChart2: BarChart2,
+            ErrorState: ErrorState,
             isLoading: isLoading,
+            isError: isError,
+            refetch: refetch,
             chartOption: chartOption,
         };
     },
+    __typeProps: {},
 });
 export default (await import('vue')).defineComponent({
     setup() {
         return {};
     },
+    __typeProps: {},
 });
 ; /* PartiallyEnd: #4569/main.vue */

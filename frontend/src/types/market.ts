@@ -1,39 +1,47 @@
-export type SentimentLabel = 'Bullish' | 'Bearish' | 'Neutral';
+/** Discriminated union of all valid asset ticker symbols tracked by the backend. */
+export type RouteAssetId = 'BTC' | 'ETH' | 'SOL' | 'AAPL'
+
+/** Sentiment classification label produced by the LLM analysis engine. */
+export type SentimentLabel = 'Bullish' | 'Bearish' | 'Neutral'
 
 export interface AssetMetrics {
-  id: string;
-  name: string;
-  symbol: string;
-  price: number;
-  change24h: number;
-  high24h: number;
-  low24h: number;
-  volume24h: number;
-  sentimentScore: number; // 0 to 100 index
-  sentimentLabel: SentimentLabel;
+  id: RouteAssetId
+  name: string
+  symbol: string
+  price: number
+  change24h: number
+  high24h: number
+  low24h: number
+  volume24h: number
+  /** Aggregated sentiment index in the range 0–100. */
+  sentimentScore: number
+  sentimentLabel: SentimentLabel
 }
 
 export interface HistoricalDataPoint {
-  timestamp: string; // ISO or human-readable
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-  sentimentScore: number; // 0 to 100 sentiment score index
+  /** Human-readable timestamp label used as the x-axis category on the chart. */
+  timestamp: string
+  open: number
+  high: number
+  low: number
+  close: number
+  volume: number
+  /** Sentiment index snapshot at this candle, range 0–100. */
+  sentimentScore: number
 }
 
 export interface SentimentArticle {
-  id: string;
-  timestamp: string;
-  source: string;
-  title: string;
-  url: string;
-  summary: string;
-  sentimentScore: number; // -1.0 to 1.0
-  sentimentLabel: SentimentLabel;
-  confidence: number; // 0.0 to 1.0
-  keywords: string[];
-  llmReasoning: string;
+  id: string
+  timestamp: string
+  source: string
+  title: string
+  url: string
+  summary: string
+  /** Raw LLM sentiment score in the range -1.0 (bearish) to +1.0 (bullish). */
+  sentimentScore: number
+  sentimentLabel: SentimentLabel
+  /** Model confidence for the sentiment classification, range 0.0–1.0. */
+  confidence: number
+  keywords: string[]
+  llmReasoning: string
 }
-

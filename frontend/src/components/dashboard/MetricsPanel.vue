@@ -1,12 +1,18 @@
 <script setup lang="ts">
-import { useAppStore } from '@/composables/useAppStore'
 import { useAssetById } from '@/composables/useMarketData'
 import { ArrowUpRight, ArrowDownRight, DollarSign, Activity, Percent, Layers } from '@lucide/vue'
-import { storeToRefs } from 'pinia'
+import ErrorState from '@/components/ui/ErrorState.vue'
+import type { RouteAssetId } from '@/types/market'
+import { computed } from 'vue'
 
-const store = useAppStore()
-const { selectedAssetId } = storeToRefs(store)
-const { data: asset, isLoading } = useAssetById(selectedAssetId)
+const props = defineProps<{
+  /** The asset ticker ID derived from the current route parameter. */
+  assetId: RouteAssetId
+}>()
+
+const { data: asset, isLoading, isError, refetch } = useAssetById(computed(() => props.assetId))
+
+
 
 const formatCurrency = (val: number, symbol: string) => {
   const options = symbol === 'AAPL'
@@ -42,12 +48,22 @@ const getSentimentLabel = (score: number) => {
 
 <template>
   <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-    <!-- Skeleton loader -->
-    <template v-if="isLoading || !asset">
+    <!-- Skeleton while loading -->
+    <template v-if="isLoading">
       <div v-for="i in 4" :key="i" class="h-28 bg-card border border-border/30 rounded-2xl animate-pulse" />
     </template>
 
-    <template v-else>
+    <!-- Error state -->
+    <div v-else-if="isError" class="col-span-full">
+      <ErrorState
+        title="Failed to load asset metrics"
+        description="The backend may be starting up or temporarily unavailable."
+        :on-retry="() => refetch()"
+      />
+    </div>
+
+    <template v-else-if="asset">
+
       <!-- Price Card -->
       <div class="glass-card p-5 rounded-2xl border border-border/40 flex flex-col justify-between relative overflow-hidden group">
         <div class="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-full blur-2xl pointer-events-none transition-opacity duration-300 group-hover:bg-primary/10"></div>
