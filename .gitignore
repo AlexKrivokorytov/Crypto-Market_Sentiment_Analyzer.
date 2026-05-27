@@ -1,0 +1,55 @@
+# Python environment and compilation files
+.venv/
+venv/
+env/
+backend/.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# AI Agents and helpers
+.agents/
+
+# Python tools and caches
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+htmlcov/
+.coverage
+.coverage.*
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+
+# Frontend build outputs and packages
+frontend/dist/
+frontend/node_modules/
+.eslintcache
+.stylelintcache
+
+# Project internal planning notes
+PROJECT_PLAN.md
+
+# Local environment configuration secrets
+.env
+.env.local
+.env.*.local
+
+# IDE configurations
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Project temporary build artifacts
+README_utf8.md
+*.tmp

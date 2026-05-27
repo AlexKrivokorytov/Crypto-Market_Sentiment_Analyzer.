@@ -1,9 +1,130 @@
 """
-Tests for the Market Sentiment Analyzer FastAPI endpoints.
+Tests for the Market Sentiment Analyzer FastAPI endpoints with mocked MongoDB motor collections.
 """
 
-from fastapi.testclient import TestClient
-from backend.app.main import app
+from typing import Any, List
+from unittest.mock import AsyncMock, MagicMock
+import backend.app.core.database as db
+
+mock_assets = [
+    {
+        "id": "BTC",
+        "name": "Bitcoin",
+        "symbol": "BTC",
+        "price": 68420.50,
+        "change24h": 2.45,
+        "high24h": 69150.00,
+        "low24h": 66800.00,
+        "volume24h": 28450120000,
+        "sentimentScore": 74,
+        "sentimentLabel": "Bullish",
+    },
+    {
+        "id": "ETH",
+        "name": "Ethereum",
+        "symbol": "ETH",
+        "price": 3482.10,
+        "change24h": -1.15,
+        "high24h": 3590.00,
+        "low24h": 3420.00,
+        "volume24h": 14210980000,
+        "sentimentScore": 48,
+        "sentimentLabel": "Neutral",
+    },
+    {
+        "id": "SOL",
+        "name": "Solana",
+        "symbol": "SOL",
+        "price": 154.85,
+        "change24h": 8.68,
+        "high24h": 156.40,
+        "low24h": 140.20,
+        "volume24h": 4120550000,
+        "sentimentScore": 86,
+        "sentimentLabel": "Bullish",
+    },
+    {
+        "id": "AAPL",
+        "name": "Apple Inc.",
+        "symbol": "AAPL",
+        "price": 185.35,
+        "change24h": -0.42,
+        "high24h": 186.95,
+        "low24h": 184.10,
+        "volume24h": 8930400000,
+        "sentimentScore": 54,
+        "sentimentLabel": "Neutral",
+    },
+]
+
+mock_articles = [
+    {
+        "id": "art_1",
+        "asset_id": "SOL",
+        "timestamp": "2026-05-27T12:00:00Z",
+        "source": "CoinDesk",
+        "title": "Solana breaks out",
+        "url": "#",
+        "summary": "Solana surges high.",
+        "sentimentScore": 0.85,
+        "sentimentLabel": "Bullish",
+        "confidence": 0.95,
+        "keywords": ["solana", "breakout"],
+        "llmReasoning": "Strong technical breakout on high volume.",
+    }
+]
+
+
+class MockCursor:
+    """
+    Mock MongoDB cursor class mimicking motor's async find() behavior.
+    """
+
+    def __init__(self, data: List[Any]):
+        self.data = data
+
+    async def to_list(self, length: int) -> List[Any]:
+        """
+        Mock implementation of motor's to_list method.
+        """
+        return self.data[:length]
+
+    def sort(self, key: str, direction: int = -1) -> "MockCursor":
+        """
+        Mock implementation of motor's sort method.
+        """
+        self.data = sorted(
+            self.data, key=lambda x: x.get(key, ""), reverse=(direction == -1)
+        )
+        return self
+
+
+db.assets_collection = MagicMock()
+db.assets_collection.find = MagicMock(return_value=MockCursor(mock_assets))
+db.assets_collection.find_one = AsyncMock(
+    side_effect=lambda query: next(
+        (a for a in mock_assets if a["id"] == query.get("id")), None
+    )
+)
+
+db.articles_collection = MagicMock()
+db.articles_collection.find = MagicMock(
+    side_effect=lambda query: MockCursor(
+        [art for art in mock_articles if art["asset_id"] == query.get("asset_id")]
+    )
+)
+db.articles_collection.find_one = AsyncMock(
+    side_effect=lambda query: next(
+        (art for art in mock_articles if art["id"] == query.get("id")), None
+    )
+)
+
+db.ping_database = AsyncMock(return_value=True)
+
+# Import TestClient and app after monkeypatching to prevent real DB connections on import
+from fastapi.testclient import TestClient  # noqa: E402
+from backend.app.main import app  # noqa: E402
+
 
 client = TestClient(app)
 
@@ -14,7 +135,10 @@ def test_health_check() -> None:
     """
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "healthy", "service": "Market Sentiment Analyzer API"}
+    assert response.json() == {
+        "status": "healthy",
+        "service": "Market Sentiment Analyzer API",
+    }
 
 
 def test_list_assets() -> None:

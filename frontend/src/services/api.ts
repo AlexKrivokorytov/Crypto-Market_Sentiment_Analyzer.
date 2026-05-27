@@ -64,5 +64,20 @@ export const marketApi = {
       throw new Error(`Failed to fetch articles: id=${assetId} status=${response.status}`);
     }
     return response.json();
+  },
+
+  /**
+   * Fetches the backend's active LLM configuration — model name and whether a live
+   * endpoint is configured. Used to display status in the sidebar footer.
+   *
+   * @returns A promise resolving to llm_configured flag and llm_model name.
+   * @throws An error if the request fails.
+   */
+  async getConfig(): Promise<{ llm_configured: boolean; llm_model: string }> {
+    const response = await fetch(`${BASE_URL}/config`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch config: status=${response.status}`);
+    }
+    return response.json();
   }
 };

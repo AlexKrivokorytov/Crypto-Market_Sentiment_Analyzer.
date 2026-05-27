@@ -37,8 +37,3 @@ export interface SentimentArticle {
   llmReasoning: string;
 }
 
-export interface MarketState {
-  selectedAssetId: string;
-  timeframe: '1H' | '24H' | '7D' | '30D';
-  sidebarCollapsed: boolean;
-}

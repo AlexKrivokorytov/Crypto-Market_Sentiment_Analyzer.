@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useAppStore } from '@/composables/useAppStore'
-import { useAssets } from '@/composables/useMarketData'
+import { useAssets, useBackendConfig } from '@/composables/useMarketData'
 import { Activity, Cpu, TrendingDown, TrendingUp } from '@lucide/vue'
 import { storeToRefs } from 'pinia'
 
@@ -8,6 +8,7 @@ const store = useAppStore()
 const { selectedAssetId, sidebarCollapsed } = storeToRefs(store)
 
 const { data: assets, isLoading } = useAssets()
+const { data: config } = useBackendConfig()
 
 const formatCurrency = (val: number, symbol: string) => {
   const options = symbol === 'AAPL' 
@@ -119,10 +120,18 @@ const formatCurrency = (val: number, symbol: string) => {
           <Cpu class="h-4 w-4 text-indigo-400 animate-pulse" />
         </div>
         <div class="flex flex-col min-w-0 transition-all duration-200" :class="[sidebarCollapsed ? 'opacity-0 w-0 scale-95 pointer-events-none' : 'opacity-100 w-auto scale-100']">
-          <span class="text-xs font-semibold text-foreground truncate">Llama-3 Model</span>
-          <span class="text-[10px] text-emerald-400 font-medium flex items-center gap-1">
-            <span class="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping"></span>
-            Mock Feed Active
+          <span class="text-xs font-semibold text-foreground truncate">
+            {{ config?.llm_model || 'Loading model...' }}
+          </span>
+          <span 
+            class="text-[10px] font-medium flex items-center gap-1"
+            :class="[config?.llm_configured ? 'text-emerald-400' : 'text-amber-400']"
+          >
+            <span 
+              class="h-1.5 w-1.5 rounded-full animate-ping"
+              :class="[config?.llm_configured ? 'bg-emerald-400' : 'bg-amber-400']"
+            ></span>
+            {{ config?.llm_configured ? 'Live AI Active' : 'Simulation Mode' }}
           </span>
         </div>
       </div>

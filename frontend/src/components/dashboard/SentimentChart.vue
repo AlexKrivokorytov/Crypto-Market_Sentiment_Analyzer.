@@ -10,6 +10,13 @@ import { useHistoricalData } from '@/composables/useMarketData'
 import { storeToRefs } from 'pinia'
 import { BarChart2 } from '@lucide/vue'
 
+interface TooltipParam {
+  axisValue: string
+  seriesName: string
+  data: number[]
+  value: number
+}
+
 // Register ECharts modules
 use([
   CanvasRenderer,
@@ -58,22 +65,23 @@ const chartOption = computed(() => {
         color: '#f1f5f9',
         fontSize: 12
       },
-      formatter: (params: any) => {
+      formatter: (params: TooltipParam | TooltipParam[]) => {
+        const paramList = Array.isArray(params) ? params : [params]
         let content = `<div class="font-sans p-1">
-          <div class="font-bold text-slate-400 mb-1.5">${params[0].axisValue}</div>`
+          <div class="font-bold text-slate-400 mb-1.5">${paramList[0]?.axisValue ?? ''}</div>`
         
-        params.forEach((param: any) => {
+        paramList.forEach((param: TooltipParam) => {
           if (param.seriesName === 'Price') {
-            const data = param.data; // [index, open, close, low, high]
+            const [, open = 0, close = 0, low = 0, high = 0] = param.data
             content += `<div class="flex justify-between items-center gap-6 mb-1">
               <span class="text-slate-400 flex items-center gap-1.5">
-                <span class="h-2 w-2 rounded-full" style="background-color: ${data[2] >= data[1] ? '#10b981' : '#f43f5e'}"></span>
+                <span class="h-2 w-2 rounded-full" style="background-color: ${close >= open ? '#10b981' : '#f43f5e'}"></span>
                 Price:
               </span>
-              <span class="font-mono font-bold">$${data[2].toLocaleString()}</span>
+              <span class="font-mono font-bold">$${close.toLocaleString()}</span>
             </div>
             <div class="text-[10px] text-slate-500 font-mono pl-3.5 mb-1.5">
-              O: $${data[1]} &nbsp; H: $${data[4]} &nbsp; L: $${data[3]} &nbsp; C: $${data[2]}
+              O: $${open} &nbsp; H: $${high} &nbsp; L: $${low} &nbsp; C: $${close}
             </div>`
           } else if (param.seriesName === 'LLM Sentiment') {
             const color = param.value >= 60 ? '#10b981' : param.value <= 40 ? '#f43f5e' : '#94a3b8';

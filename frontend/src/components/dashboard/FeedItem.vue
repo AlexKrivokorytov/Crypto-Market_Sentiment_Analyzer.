@@ -1,13 +1,17 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { SentimentArticle } from '@/types/market'
 import { MessageSquare, ArrowRight, ChevronDown, ChevronUp, Cpu, Calendar, ShieldCheck } from '@lucide/vue'
 
-defineProps<{
+const props = defineProps<{
   article: SentimentArticle
 }>()
 
 const isExpanded = ref(false)
+
+const isSimulated = computed(() => {
+  return props.article.llmReasoning.includes('(Simulated Analysis')
+})
 
 const formatTime = (isoString: string) => {
   const date = new Date(isoString)
@@ -44,8 +48,18 @@ const formatDate = (isoString: string) => {
 
       <!-- Sentiment and Confidence Badges -->
       <div class="flex items-center gap-2">
+        <span 
+          class="px-2 py-0.5 rounded border text-[9px] uppercase font-extrabold tracking-wider"
+          :class="[
+            isSimulated 
+              ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' 
+              : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+          ]"
+        >
+          {{ isSimulated ? 'Simulated' : 'AI Analyzed' }}
+        </span>
         <span
-          class="px-2 py-0.5 rounded-full border text-[10px] uppercase font-bold tracking-wider"
+          class="px-2 py-0.5 rounded border text-[9px] uppercase font-extrabold tracking-wider"
           :class="[
             article.sentimentLabel === 'Bullish'
               ? 'bg-bullish/10 text-bullish border-bullish/30'
@@ -56,9 +70,9 @@ const formatDate = (isoString: string) => {
         >
           {{ article.sentimentLabel }}
         </span>
-        <span class="flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-[10px] text-indigo-400 font-bold uppercase">
+        <span class="flex items-center gap-0.5 px-2 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 text-[9px] text-indigo-400 font-extrabold uppercase">
           <ShieldCheck class="h-3 w-3" />
-          {{ Math.round(article.confidence * 100) }}% Conf.
+          {{ Math.round(article.confidence * 100) }}%
         </span>
       </div>
     </div>

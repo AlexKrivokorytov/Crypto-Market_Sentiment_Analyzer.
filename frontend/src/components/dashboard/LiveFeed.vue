@@ -39,7 +39,12 @@ const filteredArticles = computed(() => {
         </div>
         <div>
           <h2 class="text-sm font-bold text-foreground">Live LLM Feed</h2>
-          <p class="text-[10px] text-muted-foreground font-semibold">Real-time news processing pipeline</p>
+          <p class="text-[10px] text-muted-foreground font-semibold leading-tight">
+            Real-time RSS news analysis.
+            <span class="text-[9px] text-slate-500 font-medium block mt-0.5">
+              Startup seed data is simulated to bypass initial model loading lags.
+            </span>
+          </p>
         </div>
       </div>
       
