@@ -147,10 +147,20 @@ async def lifespan(app_inst: FastAPI) -> AsyncIterator[None]:
         await ensure_indexes()
         log_event(logging.INFO, "db_indexes_ensured", details="MongoDB indexes ready.")
 
-        # Hydrate aggregator on startup from existing raw ticks of the current hour
+        # Hydrate aggregator on startup from existing raw ticks of the current hour.
+        # A hydration failure is non-fatal: the aggregator starts with an empty buffer
+        # and will reconstruct state from new incoming ticks.
         from backend.app.services.aggregator import aggregator
 
-        await aggregator.hydrate_from_db()
+        try:
+            await aggregator.hydrate_from_db()
+        except Exception as hydrate_exc:
+            log_event(
+                logging.WARNING,
+                "aggregator_hydration_skipped",
+                details="Aggregator will start with empty buffer.",
+                error=str(hydrate_exc),
+            )
 
     if is_render:
         from backend.app.core.config import settings

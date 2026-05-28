@@ -14,11 +14,13 @@ Phase 2 integration:
 
 import asyncio
 import logging
+import random
 from typing import Any, Dict, List, cast
 
 import httpx
 
 from backend.app.core.cache import cache
+from backend.app.core.config import settings
 
 logger = logging.getLogger("app")
 
@@ -312,8 +314,6 @@ async def fetch_alchemy_prices() -> Dict[str, Dict[str, float]]:
             - low24h: float
             - volume24h: float
     """
-    from backend.app.core.config import settings
-
     if not settings.ALCHEMY_API_KEY:
         return await fetch_coingecko_prices()
 
@@ -372,9 +372,6 @@ async def fetch_onchain_metrics(asset_id: str) -> Dict[str, Any]:
     Fetches real-time on-chain stats (gas price, tx count) for Ethereum, Solana, and TON.
     Uses Alchemy API key JSON-RPC endpoints when available, falling back gracefully to simulated feeds.
     """
-    from backend.app.core.config import settings
-    import random
-
     # Default fallback metrics
     defaults: Dict[str, Dict[str, Any]] = {
         "ETH": {

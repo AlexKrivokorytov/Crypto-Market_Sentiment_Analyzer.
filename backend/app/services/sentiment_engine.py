@@ -205,6 +205,9 @@ def analyze_sentiment_local(title: str, summary: str) -> Dict[str, Any]:
 
     # Pre-split sentences around contrastive conjunction 'but'
     # Conjunction 'but' shifts valence: pre-but is dampened (*0.5), post-but is boosted (*1.5)
+    # Note: Only the FIRST occurrence of 'but' is used for contrastive dampening.
+    # Multiple 'but' clauses (e.g. "crashed but recovered but crashed") are intentionally
+    # simplified to avoid over-engineering the MVP. Only the first pivot matters most.
     but_idx = -1
     for i, token in enumerate(tokens):
         if _clean_token(token) == "but":

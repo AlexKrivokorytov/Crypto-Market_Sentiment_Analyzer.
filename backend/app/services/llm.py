@@ -183,13 +183,19 @@ def clean_text(text: str) -> str:
     return " ".join(text.split())
 
 
-# Global reusable HTTP client for LLM API calls with a high timeout (60.0s) for model cold starts
+# RESERVED: Retained for future Ollama / LM Studio integration.
+# When LLM_API_URL is configured, this client replaces the local VADER engine
+# with a remote model call. Currently unused — analyze_sentiment_local is the
+# sole analysis path.
 _llm_client: Optional[httpx.AsyncClient] = None
 
 
 def get_llm_client() -> httpx.AsyncClient:
     """
     Returns a shared singleton instance of AsyncClient for LLM queries.
+
+    Reserved for future Ollama / LM Studio integration via LLM_API_URL.
+    Currently not called by any active code path.
     """
     global _llm_client
     if _llm_client is None:

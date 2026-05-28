@@ -34,14 +34,7 @@ services:
     # Uses the DB-bypass /api/v1/healthz warmup route so Render health pings
     # succeed instantly without triggering a MongoDB round-trip.
     healthcheck:
-      test:
-        - "CMD"
-        - "python"
-        - "-c"
-        - >
-          import urllib.request, sys;
-          r = urllib.request.urlopen('http://localhost:8000/api/v1/healthz', timeout=8);
-          sys.exit(0 if r.status == 200 else 1)
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; r=urllib.request.urlopen('http://localhost:8000/api/v1/healthz',timeout=8); sys.exit(0 if r.status==200 else 1)\""]
       interval: 30s
       timeout: 10s
       retries: 3

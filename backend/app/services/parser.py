@@ -30,6 +30,11 @@ ASSET_REGEX: Dict[str, re.Pattern[str]] = {
     "ADA": re.compile(r"\b(cardano|ada)\b", re.IGNORECASE),
 }
 
+# Maximum articles processed per sweep to cap blocking time per loop iteration.
+# Adjust upward if real-time latency allows, or downward on Render free-tier constraints.
+MAX_ARTICLES_PER_SWEEP: int = 15
+MAX_AAPL_ARTICLES_PER_SWEEP: int = 3
+
 
 def _md5_hash(text: str) -> str:
     """
@@ -259,8 +264,8 @@ async def process_unified_crypto_feed() -> None:
     parsed_items = parse_rss_xml(xml_content)
     new_articles_count = 0
 
-    # Limit to top 15 parsed items to prevent long blocking runs, sweeping oldest first
-    for item in parsed_items[:15]:
+    # Limit to top MAX_ARTICLES_PER_SWEEP parsed items to cap blocking time per iteration
+    for item in parsed_items[:MAX_ARTICLES_PER_SWEEP]:
         await asyncio.sleep(0.5)  # Yield loop focus
 
         if _is_duplicate_in_window(item["title"]):
@@ -341,7 +346,7 @@ async def process_aapl_feed() -> None:
     parsed_items = parse_rss_xml(xml_content)
     new_articles_count = 0
 
-    for item in parsed_items[:3]:
+    for item in parsed_items[:MAX_AAPL_ARTICLES_PER_SWEEP]:
         await asyncio.sleep(0.5)
 
         if _is_duplicate_in_window(item["title"]):

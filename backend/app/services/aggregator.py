@@ -77,7 +77,12 @@ class InMemoryAggregator:
                     count,
                 )
             except Exception as exc:
-                logger.error("aggregator_hydration_failed: error=%s", str(exc))
+                logger.error(
+                    "aggregator_hydration_failed: error=%s "
+                    "The aggregator will start with an empty buffer.",
+                    str(exc),
+                )
+                raise
 
     async def add_tick(self, asset_id: str, price: float, sentiment: float) -> None:
         """
@@ -124,6 +129,7 @@ class InMemoryAggregator:
                     asset_id,
                     str(exc),
                 )
+                raise
 
     async def aggregate_and_flush(self) -> None:
         """
@@ -228,7 +234,11 @@ class InMemoryAggregator:
                         avg_vader,
                     )
             except Exception as exc:
-                logger.error("aggregator_aggregation_failed: error=%s", str(exc))
+                logger.error(
+                    "aggregator_aggregation_failed: error=%s",
+                    str(exc),
+                )
+                raise
 
 
 # Global Aggregator Singleton Instance
