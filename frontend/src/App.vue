@@ -4,6 +4,7 @@ import { onErrorCaptured } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import Sidebar from '@/components/layout/Sidebar.vue'
 import Header from '@/components/layout/Header.vue'
+import ToastContainer from '@/components/ui/ToastContainer.vue'
 import { useAppStore } from '@/composables/useAppStore'
 import { storeToRefs } from 'pinia'
 
@@ -56,6 +57,7 @@ onErrorCaptured((error: Error, instance, info: string) => {
       <RouterView />
     </div>
   </div>
+  <ToastContainer />
 </template>
 
 <style>

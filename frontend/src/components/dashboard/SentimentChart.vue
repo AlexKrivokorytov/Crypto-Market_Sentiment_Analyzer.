@@ -261,7 +261,7 @@ const chartOption = computed(() => {
 </script>
 
 <template>
-  <div class="glass-card p-6 rounded-3xl border border-border/40 flex flex-col h-[320px] sm:h-[420px] lg:h-[480px]">
+  <div class="glass-card p-6 rounded-3xl border border-border/40 flex flex-col h-[320px] sm:h-[400px] lg:h-[480px]">
     <div class="flex items-center justify-between mb-4 shrink-0">
       <div class="flex items-center gap-2 select-none">
         <div class="p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">

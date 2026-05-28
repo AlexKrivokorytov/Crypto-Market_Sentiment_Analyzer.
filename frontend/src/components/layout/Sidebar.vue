@@ -4,7 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useAppStore } from '@/composables/useAppStore'
 import { useAuthStore } from '@/composables/useAuthStore'
 import { useAssets, useBackendConfig } from '@/composables/useMarketData'
-import { Activity, Cpu, TrendingDown, TrendingUp } from '@lucide/vue'
+import { Activity, Cpu, TrendingDown, TrendingUp, Star } from '@lucide/vue'
 import { storeToRefs } from 'pinia'
 
 const router = useRouter()
@@ -106,7 +106,10 @@ function handleLogout(): void {
           :class="[sidebarCollapsed ? 'opacity-0 w-0 scale-95 pointer-events-none' : 'opacity-100 w-auto scale-100']"
         >
           <div class="flex flex-col min-w-0">
-            <span class="font-semibold text-sm truncate">{{ asset.name }}</span>
+            <span class="font-semibold text-sm truncate flex items-center gap-1.5 text-slate-200">
+              {{ asset.name }}
+              <Star v-if="authStore.user?.watchlist.includes(asset.id)" class="h-3 w-3 text-amber-400 fill-amber-400 shrink-0 shadow-sm" />
+            </span>
             <span class="text-xs text-muted-foreground truncate">{{ formatCurrency(asset.price, asset.symbol) }}</span>
           </div>
 
