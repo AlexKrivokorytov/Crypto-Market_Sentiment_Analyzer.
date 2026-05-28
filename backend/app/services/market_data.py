@@ -530,6 +530,10 @@ async def _aapl_ohlcv_to_candles(
     if hist is None or hist.empty:
         return []
 
+    # Flatten MultiIndex columns to single string names if necessary
+    if hasattr(hist.columns, "levels"):
+        hist.columns = hist.columns.get_level_values(0)
+
     sentiment_score: int = int(asset.get("sentimentScore", 50))
     volume24h: int = int(asset.get("volume24h", 1000000))
     points_count = _timeframe_to_points_count(timeframe)

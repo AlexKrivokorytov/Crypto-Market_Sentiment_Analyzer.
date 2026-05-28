@@ -243,6 +243,10 @@ def _fetch_aapl_sync() -> Dict[str, float]:
     volume24h = 0
 
     if hist is not None and not hist.empty:
+        # Flatten MultiIndex columns to single string names if necessary
+        if hasattr(hist.columns, "levels"):
+            hist.columns = hist.columns.get_level_values(0)
+            
         last_row = hist.iloc[-1]
         high24h = float(last_row.get("High", current_price))
         low24h = float(last_row.get("Low", current_price))

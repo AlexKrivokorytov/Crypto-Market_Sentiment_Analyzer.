@@ -1,5 +1,15 @@
 # 📊 LLM-Powered Market Sentiment Analyzer
 
+<div align="center">
+
+![Build & E2E Validation](https://img.shields.io/badge/build-passing-success?style=for-the-badge&logo=github)
+![Vue 3 Composition API](https://img.shields.io/badge/Vue-3.x--Composition-4fc08d?style=for-the-badge&logo=vue.js)
+![FastAPI Async](https://img.shields.io/badge/FastAPI-Async--0.110+-009688?style=for-the-badge&logo=fastapi)
+![MongoDB Native](https://img.shields.io/badge/MongoDB-6.0+-47A248?style=for-the-badge&logo=mongodb)
+![TypeScript Strict](https://img.shields.io/badge/TypeScript-Strict--5.2+-3178C6?style=for-the-badge&logo=typescript)
+
+</div>
+
 A premium, production-grade Full-Stack Web Application that aggregates financial asset metrics (BTC, ETH, SOL, AAPL) and processes real-time news feeds via an LLM sentiment analysis pipeline. Built with absolute focus on type safety, strict architectural boundaries, and modern industry standards.
 
 ---
@@ -17,6 +27,38 @@ A premium, production-grade Full-Stack Web Application that aggregates financial
 
 ## 🏗️ System Architecture
 
+```mermaid
+graph TD
+    subgraph Frontend ["Vue 3 Client (Single Page App)"]
+        V["Vue 3 Components Setup TS"] <--> PQ["Vue Query Server Caches"]
+        V <--> P["Pinia Client Preferences"]
+        V <--> C["Apache ECharts Rendering"]
+    end
+
+    subgraph Backend ["FastAPI Engine (Python 3.12 Async)"]
+        E["API Endpoints & Routers"] <--> WS["WebSockets Handler"]
+        BG["Price Feed Worker (Every 7s)"]
+        Parser["Google News RSS Sweeper (Every 60s)"]
+    end
+
+    subgraph LLM ["AI Pipeline / Fallback"]
+        LLM_API["Ollama / LM Studio API"]
+        Fall["Deterministic Heuristic Fallback"]
+    end
+
+    subgraph Database ["Persistence Layer"]
+        DB[("MongoDB Databases")]
+    end
+
+    PQ <--> E
+    V <--> WS
+    Parser --> LLM_API
+    Parser --> Fall
+    Parser --> DB
+    BG --> DB
+    E --> DB
+```
+
 ### Frontend (Vue 3 Single Page App)
 *   **Framework**: Vue 3 (Composition API strictly using `<script setup lang="ts">`).
 *   **Language**: TypeScript (Strict mode, `strict: true`, no `any` types).
@@ -29,6 +71,16 @@ A premium, production-grade Full-Stack Web Application that aggregates financial
 *   **Data Access**: MongoDB client connection managed via `motor` async driver.
 *   **Validation**: Pydantic v2 validation schemas.
 *   **Task Workers**: Parallel background loops running price simulations (every 7 seconds) and fetching news articles (every 60 seconds).
+
+---
+
+## 🛡️ Security & Hardening Controls
+
+This repository implements industry-standard safety defenses:
+*   **Direct Cryptographic Hashing**: Employs raw `bcrypt` password salting and hashing rather than relying on legacy or bloated third-party wrapper wrappers, eliminating string length edge-cases.
+*   **Strict Password Validation**: A custom Pydantic `@field_validator` guarantees that all user passwords meet secure complexity criteria (at least 8 characters, containing at least one letter and at least one digit).
+*   **Brute-Force Attack Prevention**: Integrated `SlowAPI` limiters on the critical `/auth/register` and `/auth/login` endpoints, restricting requests to a maximum of 10 per minute to guard against credential stuffing and automated attacks.
+*   **Convenient Escape Pathway**: Provided highly visible and accessible "Back to Dashboard" glassmorphism exit routes on both the sign-in and account creation panels, ensuring that guest users are never locked out of exploring market data.
 
 ---
 
@@ -53,7 +105,7 @@ The entire stack is containerized using **Docker** and orchestrated with **Docke
     *(Note: Using `host.docker.internal` allows the Docker container to access the LLM server running on your host machine's localhost.)*
 3.  Launch the container stack:
     ```bash
-    docker-compose up --build -d
+    docker compose up --build -d
     ```
 4.  Open the web app in your browser:
     👉 **`http://localhost:8080`**
@@ -74,9 +126,14 @@ This repository enforces strict clean-code gates:
 *   **Strict Type Checks**: Verified via **Mypy**:
     ```bash
     # Execute from the workspace root to resolve package bases
-    backend/.venv/Scripts/mypy --strict --explicit-package-bases backend
+    .venv/Scripts/mypy --strict --explicit-package-bases backend
     ```
 *   **Automated Test Suite**: Pytest assertions covering API endpoints and health checks:
     ```bash
-    backend/.venv/Scripts/python -m pytest backend/app/tests
+    $env:PYTHONPATH="."
+    .venv/Scripts/pytest
+    ```
+*   **Database Admin Script**: Wipe and reseeding tool:
+    ```bash
+    .venv/Scripts/python backend/scripts/clear_db.py
     ```

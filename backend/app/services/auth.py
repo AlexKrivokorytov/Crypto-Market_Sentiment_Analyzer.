@@ -5,21 +5,19 @@ Handles password hashing, JWT token creation/verification, user CRUD,
 and watchlist management using the Motor async MongoDB driver.
 """
 
+import bcrypt
 import datetime
 import logging
 from typing import Any, Dict, Optional
 
 from bson import ObjectId
 from jose import JWTError, jwt  # type: ignore[import-untyped]
-from passlib.context import CryptContext  # type: ignore[import-untyped]
 
 from backend.app.core.config import settings
 from backend.app.core.database import users_collection
 from backend.app.schemas.auth import UserCreate, UserPublic
 
 logger = logging.getLogger("app")
-
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -37,14 +35,15 @@ def hash_password(plain_password: str) -> str:
     Returns:
         The bcrypt-hashed password string.
     """
-    return str(_pwd_context.hash(plain_password))
+    pwd_bytes = plain_password.encode("utf-8")
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(pwd_bytes, salt)
+    return hashed.decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
     Verifies a plain-text password against a stored bcrypt hash.
-
-    Uses passlib's constant-time comparison internally.
 
     Args:
         plain_password: The raw password from login input.
@@ -53,7 +52,13 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     Returns:
         True if the password matches, False otherwise.
     """
-    return bool(_pwd_context.verify(plain_password, hashed_password))
+    pwd_bytes = plain_password.encode("utf-8")
+    hashed_bytes = hashed_password.encode("utf-8")
+    try:
+        return bool(bcrypt.checkpw(pwd_bytes, hashed_bytes))
+    except Exception as exc:
+        logger.error("password_verification_failed", extra={"error": str(exc)})
+        return False
 
 
 # ──────────────────────────────────────────────────────────────────────────────
