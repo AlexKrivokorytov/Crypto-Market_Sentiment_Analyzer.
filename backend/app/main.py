@@ -125,6 +125,7 @@ async def lifespan(app_inst: FastAPI) -> AsyncIterator[None]:
     from backend.app.services.market_data import (
         seed_database_if_empty,
         background_update_loop,
+        hourly_aggregation_loop,
     )
     from backend.app.services.parser import rss_parser_loop
 
@@ -145,6 +146,11 @@ async def lifespan(app_inst: FastAPI) -> AsyncIterator[None]:
         )
         await ensure_indexes()
         log_event(logging.INFO, "db_indexes_ensured", details="MongoDB indexes ready.")
+
+        # Hydrate aggregator on startup from existing raw ticks of the current hour
+        from backend.app.services.aggregator import aggregator
+
+        await aggregator.hydrate_from_db()
 
     if is_render:
         from backend.app.core.config import settings
@@ -175,6 +181,9 @@ async def lifespan(app_inst: FastAPI) -> AsyncIterator[None]:
         supervised_task(background_update_loop, "background_update_loop")
     )
     rss_task = asyncio.create_task(supervised_task(rss_parser_loop, "rss_parser_loop"))
+    agg_task = asyncio.create_task(
+        supervised_task(hourly_aggregation_loop, "hourly_aggregation_loop")
+    )
 
     log_event(
         logging.INFO,
@@ -186,8 +195,9 @@ async def lifespan(app_inst: FastAPI) -> AsyncIterator[None]:
 
     sim_task.cancel()
     rss_task.cancel()
+    agg_task.cancel()
     try:
-        await asyncio.gather(sim_task, rss_task, return_exceptions=True)
+        await asyncio.gather(sim_task, rss_task, agg_task, return_exceptions=True)
     except asyncio.CancelledError:
         pass
     log_event(

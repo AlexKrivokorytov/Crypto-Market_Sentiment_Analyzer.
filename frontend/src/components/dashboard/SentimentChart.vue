@@ -51,7 +51,8 @@ const chartOption = computed(() => {
   
   // Candlestick data format: [open, close, low, high]
   const prices = chartData.value.map(d => [d.open, d.close, d.low, d.high])
-  const sentiments = chartData.value.map(d => d.sentimentScore)
+  // Normalize score from 0..100 to standard continuous compound scale [-1.0, 1.0]
+  const sentiments = chartData.value.map(d => (d.sentimentScore - 50) / 50)
 
   return {
     backgroundColor: 'transparent',
@@ -94,11 +95,13 @@ const chartOption = computed(() => {
             <div class="text-[10px] text-slate-500 font-mono pl-3.5 mb-1.5">
               O: $${open} &nbsp; H: $${high} &nbsp; L: $${low} &nbsp; C: $${close}
             </div>`
-          } else if (param.seriesName === 'LLM Sentiment') {
-            const color = param.value >= 60 ? '#10b981' : param.value <= 40 ? '#f43f5e' : '#94a3b8';
+          } else if (param.seriesName === 'VADER Sentiment') {
+            const val = param.value
+            const color = val > 0 ? '#10b981' : val < 0 ? '#f43f5e' : '#94a3b8'
+            const prefix = val > 0 ? '+' : ''
             content += `<div class="flex justify-between items-center gap-6 border-t border-slate-800 pt-1.5 mt-1.5">
-              <span class="text-slate-400">LLM Sentiment:</span>
-              <span class="font-mono font-bold" style="color: ${color}">${param.value}/100</span>
+              <span class="text-slate-400">VADER Sentiment:</span>
+              <span class="font-mono font-bold" style="color: ${color}">${prefix}${val.toFixed(2)}</span>
             </div>`
           }
         })
@@ -108,7 +111,7 @@ const chartOption = computed(() => {
       }
     },
     legend: {
-      data: ['Price', 'LLM Sentiment'],
+      data: ['Price', 'VADER Sentiment'],
       textStyle: {
         color: '#94a3b8',
         fontWeight: 'bold',
@@ -157,14 +160,17 @@ const chartOption = computed(() => {
       },
       {
         type: 'value',
-        min: 0,
-        max: 100,
+        min: -1.0,
+        max: 1.0,
         position: 'right',
         axisLabel: {
           color: '#64748b',
           fontSize: 10,
           fontFamily: 'monospace',
-          formatter: '{value}%'
+          formatter: (value: number) => {
+            const prefix = value > 0 ? '+' : '';
+            return `${prefix}${value.toFixed(1)}`;
+          }
         },
         axisLine: {
           lineStyle: {
@@ -230,7 +236,7 @@ const chartOption = computed(() => {
         }
       },
       {
-        name: 'LLM Sentiment',
+        name: 'VADER Sentiment',
         type: 'line',
         yAxisIndex: 1,
         data: sentiments,
@@ -240,6 +246,21 @@ const chartOption = computed(() => {
           color: '#6366f1',
           width: 2,
           type: 'dashed'
+        },
+        markLine: {
+          silent: true,
+          symbol: 'none',
+          label: { show: false },
+          data: [
+            {
+              yAxis: 0,
+              lineStyle: {
+                color: 'rgba(255, 255, 255, 0.15)',
+                type: 'dashed',
+                width: 1
+              }
+            }
+          ]
         },
         areaStyle: {
           color: {
@@ -269,7 +290,7 @@ const chartOption = computed(() => {
         </div>
         <div>
           <h2 class="text-sm font-bold text-foreground">Interactive Overlay Chart</h2>
-          <p class="text-[10px] text-muted-foreground font-semibold">Candlestick Price overlaid with LLM Sentiment Score</p>
+          <p class="text-[10px] text-muted-foreground font-semibold">Candlestick Price overlaid with VADER Sentiment Score</p>
         </div>
       </div>
 
@@ -282,7 +303,7 @@ const chartOption = computed(() => {
           <span class="h-2 w-2 rounded bg-bearish"></span> Down Price
         </span>
         <span class="flex items-center gap-1 text-muted-foreground">
-          <span class="h-0.5 w-4 bg-primary border-t border-dashed border-primary"></span> LLM Index
+          <span class="h-0.5 w-4 bg-primary border-t border-dashed border-primary"></span> VADER Index
         </span>
       </div>
     </div>

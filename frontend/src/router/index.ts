@@ -20,7 +20,7 @@ import type { RouteRecordRaw } from 'vue-router'
 import type { RouteAssetId } from '@/types/market'
 import { useAuthStore } from '@/composables/useAuthStore'
 
-const VALID_ASSET_IDS = new Set<RouteAssetId>(['BTC', 'ETH', 'SOL', 'AAPL'])
+const VALID_ASSET_IDS = new Set<RouteAssetId>(['BTC', 'ETH', 'SOL', 'AAPL', 'TON', 'XRP', 'ADA'])
 
 const DEFAULT_ASSET: RouteAssetId = 'BTC'
 

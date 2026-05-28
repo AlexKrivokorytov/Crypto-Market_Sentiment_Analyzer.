@@ -1,0 +1,62 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Root .dockerignore — excludes files from the Docker build context.
+# Keeps the build context minimal to speed up transfers and reduce image size.
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Git and VCS metadata
+.git/
+.gitignore
+
+# Python caches and build artifacts
+**/__pycache__/
+**/*.py[cod]
+**/*.pyo
+**/.mypy_cache/
+**/.ruff_cache/
+**/.pytest_cache/
+**/.coverage
+**/htmlcov/
+**/*.egg-info/
+**/dist/
+**/build/
+
+# Python virtual environments
+.venv/
+venv/
+ENV/
+
+# Node.js / frontend build artifacts (not needed for backend image)
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Test output and coverage reports
+**/test-results/
+**/coverage/
+
+# IDE and editor configs
+.vscode/
+.idea/
+*.code-workspace
+
+# Local environment secrets (must NEVER land in an image)
+**/.env
+**/.env.local
+**/.env.*.local
+
+# OS noise
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# CI/CD and agent scratchpads
+.agents/
+.github/
+
+# Documentation images that have no runtime value
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+README.md

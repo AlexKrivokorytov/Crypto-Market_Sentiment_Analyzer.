@@ -22,6 +22,7 @@ articles_collection: AsyncIOMotorCollection[Dict[str, Any]] = db["articles"]
 historical_collection: AsyncIOMotorCollection[Dict[str, Any]] = db["historical"]
 users_collection: AsyncIOMotorCollection[Dict[str, Any]] = db["users"]
 ticks_buckets_collection: AsyncIOMotorCollection[Dict[str, Any]] = db["ticks_buckets"]
+ticks_collection: AsyncIOMotorCollection[Dict[str, Any]] = db["ticks"]
 
 
 async def ping_database() -> bool:
@@ -94,6 +95,17 @@ async def ensure_indexes() -> None:
     # Ticks Bucket Pattern: TTL index for 48 hours cleanup
     await ticks_buckets_collection.create_index(
         [("bucket_start", pymongo.ASCENDING)],
+        expireAfterSeconds=172800,  # 48 hours TTL
+        background=True,
+    )
+    # Raw minute-level ticks: Compound index for queries
+    await ticks_collection.create_index(
+        [("asset_id", pymongo.ASCENDING), ("timestamp_unix", pymongo.DESCENDING)],
+        background=True,
+    )
+    # Raw minute-level ticks: TTL index for 48 hours cleanup
+    await ticks_collection.create_index(
+        [("timestamp", pymongo.ASCENDING)],
         expireAfterSeconds=172800,  # 48 hours TTL
         background=True,
     )

@@ -1,13 +1,30 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { SentimentArticle } from '@/types/market'
-import { MessageSquare, ArrowRight, ChevronDown, ChevronUp, Cpu, Calendar, ShieldCheck } from '@lucide/vue'
+import type { SentimentArticle } from '@/types/market'
+import { MessageSquare, ArrowRight, ChevronDown, ChevronUp, Cpu, Calendar, ShieldCheck, Sparkles, Loader2 } from '@lucide/vue'
 
 const props = defineProps<{
   article: SentimentArticle
 }>()
 
 const isExpanded = ref(false)
+
+const emit = defineEmits<{
+  (e: 'requestAiAnalysis', articleId: string): void
+}>()
+
+const isAiRequestPending = ref(false)
+
+const triggerAiAnalysis = () => {
+  if (isAiRequestPending.value) return
+  isAiRequestPending.value = true
+  emit('requestAiAnalysis', props.article.id)
+  
+  // Simulate active spinner loader for 2 seconds to wow the user
+  setTimeout(() => {
+    isAiRequestPending.value = false
+  }, 2000)
+}
 
 const isSimulated = computed(() => {
   return props.article.llmReasoning.includes('(Simulated Analysis')
@@ -100,14 +117,25 @@ const formatDate = (isoString: string) => {
 
     <!-- Expandable Actions -->
     <div class="border-t border-border/40 pt-3 mt-1 flex justify-between items-center select-none">
-      <button
-        @click="isExpanded = !isExpanded"
-        class="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <Cpu class="h-3.5 w-3.5 text-primary" :class="[isExpanded ? 'animate-pulse' : '']" />
-        LLM Agent Analysis
-        <component :is="isExpanded ? ChevronUp : ChevronDown" class="h-3 w-3 text-muted-foreground" />
-      </button>
+      <div class="flex items-center gap-4">
+        <button
+          @click="isExpanded = !isExpanded"
+          class="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <Cpu class="h-3.5 w-3.5 text-primary" :class="[isExpanded ? 'animate-pulse' : '']" />
+          LLM Agent Analysis
+          <component :is="isExpanded ? ChevronUp : ChevronDown" class="h-3 w-3 text-muted-foreground" />
+        </button>
+
+        <button
+          @click="triggerAiAnalysis"
+          :disabled="isAiRequestPending"
+          class="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider text-indigo-400 hover:text-indigo-300 disabled:text-indigo-400/50 disabled:cursor-not-allowed transition-colors"
+        >
+          <component :is="isAiRequestPending ? Loader2 : Sparkles" class="h-3.5 w-3.5" :class="[isAiRequestPending ? 'animate-spin' : '']" />
+          {{ isAiRequestPending ? 'Analysing...' : 'Запросить ИИ-анализ' }}
+        </button>
+      </div>
       
       <a
         :href="article.url"

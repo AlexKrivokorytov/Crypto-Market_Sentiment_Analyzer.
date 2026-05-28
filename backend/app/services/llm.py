@@ -3,7 +3,6 @@ Service layer for LLM (LM Studio / Ollama) sentiment analysis integration.
 """
 
 import asyncio
-import json
 import logging
 import random
 import re
@@ -11,7 +10,7 @@ import time
 from typing import Any, Dict, Optional, Tuple
 import httpx
 
-from backend.app.core.config import settings
+from backend.app.services.sentiment_engine import analyze_sentiment_local
 
 logger = logging.getLogger("app")
 
@@ -202,7 +201,7 @@ async def analyze_article_sentiment(
     title: str, summary: str, asset_symbol: str
 ) -> Dict[str, Any]:
     """
-    Queries local LLM endpoint (Ollama / LM Studio) to evaluate article sentiment.
+    Evaluates article sentiment using a self-contained local VADER-like engine.
     Uses in-memory semantic cache and pre-cleans text inputs to protect token costs.
 
     Args:
@@ -217,88 +216,15 @@ async def analyze_article_sentiment(
     cleaned_title = clean_text(title)
     cleaned_summary = clean_text(summary)
 
-    # Check the in-memory cache first to avoid identical API requests
+    # Check the in-memory cache first to avoid identical requests
     cache_key = f"{asset_symbol}:{cleaned_title}:{cleaned_summary}"
     cached_result = await llm_cache.get(cache_key)
     if cached_result is not None:
-        logger.info("llm_sentiment_cache_hit: asset=%s", asset_symbol)
+        logger.info("sentiment_local_cache_hit: asset=%s", asset_symbol)
         return cached_result
 
-    if not settings.LLM_API_URL:
-        result = _get_mock_sentiment(cleaned_title, cleaned_summary)
-        await llm_cache.set(cache_key, result)
-        return result
+    # Evaluates the news sentiment instantly via the deterministic rules-based analyzer
+    result = analyze_sentiment_local(cleaned_title, cleaned_summary)
 
-    url = f"{settings.LLM_API_URL.rstrip('/')}/chat/completions"
-
-    system_instruction = (
-        "You are an expert financial analyst. Analyze the sentiment of the provided news article "
-        f"headline and summary with respect to the asset {asset_symbol}.\n"
-        "You must respond with a raw JSON object containing exactly the following fields:\n"
-        '- "sentimentScore": a float between -1.0 (extremely bearish) and 1.0 (extremely bullish)\n'
-        '- "sentimentLabel": either "Bullish", "Bearish", or "Neutral"\n'
-        '- "confidence": a float between 0.0 and 1.0 indicating your confidence in the score\n'
-        '- "keywords": a JSON array of up to 4 string keywords/tags relevant to the article\n'
-        '- "reasoning": a brief 1-3 sentence explanation of your reasoning\n'
-        "Do not include any markdown formatting like ```json or trailing text. Return ONLY valid JSON."
-    )
-
-    payload = {
-        "model": settings.LLM_MODEL,
-        "messages": [
-            {"role": "system", "content": system_instruction},
-            {
-                "role": "user",
-                "content": f"Title: {cleaned_title}\nSummary: {cleaned_summary}",
-            },
-        ],
-        "temperature": 0.1,
-        "response_format": {"type": "json_object"},
-    }
-
-    try:
-        client = get_llm_client()
-        response = await client.post(url, json=payload)
-        if response.status_code == 200:
-            result_body = response.json()
-            content = result_body["choices"][0]["message"]["content"].strip()
-
-            if content.startswith("```"):
-                lines = content.split("\n")
-                content = "\n".join(lines[1:-1])
-
-            data = json.loads(content)
-            score = max(-1.0, min(1.0, float(data.get("sentimentScore", 0.0))))
-
-            label = str(data.get("sentimentLabel", "Neutral"))
-            if label not in ("Bullish", "Bearish", "Neutral"):
-                label = "Neutral"
-
-            confidence = max(0.0, min(1.0, float(data.get("confidence", 0.8))))
-            keywords = list(data.get("keywords", []))
-            reasoning = str(data.get("reasoning", "No explanation provided."))
-
-            sentiment_data = {
-                "sentimentScore": score,
-                "sentimentLabel": label,
-                "confidence": confidence,
-                "keywords": keywords,
-                "reasoning": reasoning,
-            }
-
-            await llm_cache.set(cache_key, sentiment_data)
-            return sentiment_data
-
-        logger.warning(
-            "llm_api_non_200",
-            extra={"status_code": response.status_code},
-        )
-    except Exception as exc:
-        logger.warning(
-            "llm_api_request_failed",
-            extra={"error": str(exc)},
-        )
-
-    fallback_result = _get_mock_sentiment(cleaned_title, cleaned_summary)
-    await llm_cache.set(cache_key, fallback_result)
-    return fallback_result
+    await llm_cache.set(cache_key, result)
+    return result

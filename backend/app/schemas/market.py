@@ -3,8 +3,24 @@ Pydantic schemas for the Market Sentiment Analyzer API.
 """
 
 import datetime
-from typing import Any, List
+from typing import Any, List, Optional
 from pydantic import BaseModel, Field, ConfigDict, model_validator
+
+
+class OnChainMetrics(BaseModel):
+    """
+    On-chain blockchain metrics for Web3 network tracking.
+    """
+
+    gasPrice: float = Field(
+        ...,
+        description="Current network gas price (in Gwei for ETH, SOL/TON equivalent)",
+    )
+    txVolume1h: int = Field(
+        ..., description="Estimated transaction volume in the last hour"
+    )
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AssetMetrics(BaseModel):
@@ -31,6 +47,9 @@ class AssetMetrics(BaseModel):
     )
     lastDayReset: str = Field(
         ..., description="ISO 8601 timestamp when openPriceToday was last reset"
+    )
+    onchainMetrics: Optional[OnChainMetrics] = Field(
+        None, description="Optional real-time on-chain blockchain metrics"
     )
 
     @model_validator(mode="before")
@@ -100,6 +119,25 @@ class SentimentArticle(BaseModel):
     llmReasoning: str = Field(
         ...,
         description="LLM Chain-of-thought analysis explaining the classification reasoning",
+    )
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RawTick(BaseModel):
+    """
+    Schema representing a single raw tick inserted into MongoDB.
+    Uses timestamp_unix (absolute) and timestamp (BSON date) for TTL.
+    """
+
+    asset_id: str = Field(..., description="Unique ticker identifier")
+    timestamp: datetime.datetime = Field(
+        ..., description="BSON datetime object for TTL expiration"
+    )
+    timestamp_unix: int = Field(..., description="Absolute UNIX timestamp in seconds")
+    price: float = Field(..., description="Current price")
+    sentiment: float = Field(
+        ..., ge=-1.0, le=1.0, description="Current VADER sentiment score [-1.0, 1.0]"
     )
 
     model_config = ConfigDict(from_attributes=True)

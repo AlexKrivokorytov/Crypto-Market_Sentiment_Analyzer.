@@ -90,6 +90,34 @@ DEFAULT_ASSETS: List[Dict[str, Any]] = [
         "lastDayReset": _NOW_ISO,
     },
     {
+        "id": "XRP",
+        "name": "Ripple",
+        "symbol": "XRP",
+        "price": 0.52,
+        "change24h": 0.0,
+        "high24h": 0.55,
+        "low24h": 0.49,
+        "volume24h": 980000000,
+        "sentimentScore": 50,
+        "sentimentLabel": "Neutral",
+        "openPriceToday": 0.52,
+        "lastDayReset": _NOW_ISO,
+    },
+    {
+        "id": "ADA",
+        "name": "Cardano",
+        "symbol": "ADA",
+        "price": 0.45,
+        "change24h": 0.0,
+        "high24h": 0.48,
+        "low24h": 0.42,
+        "volume24h": 380000000,
+        "sentimentScore": 50,
+        "sentimentLabel": "Neutral",
+        "openPriceToday": 0.45,
+        "lastDayReset": _NOW_ISO,
+    },
+    {
         "id": "AAPL",
         "name": "Apple Inc.",
         "symbol": "AAPL",
@@ -818,6 +846,11 @@ async def background_update_loop() -> None:
                     ((new_price - open_price_today) / open_price_today) * 100, 2
                 )
 
+                # Fetch Web3 on-chain metrics (Alchemy / Toncenter)
+                from backend.app.services.price_feed import fetch_onchain_metrics
+
+                onchain_data = await fetch_onchain_metrics(asset_id)
+
                 await assets_collection.update_one(
                     {"id": asset_id},
                     {
@@ -827,9 +860,16 @@ async def background_update_loop() -> None:
                             "low24h": low24h,
                             "volume24h": vol24h,
                             "change24h": change24h,
+                            "onchainMetrics": onchain_data if onchain_data else None,
                         }
                     },
                 )
+
+                # Push raw tick and VADER compound sentiment to Lock-protected RAM accumulator
+                from backend.app.services.aggregator import aggregator
+
+                normalized_vader = (sentiment_score - 50.0) / 50.0
+                await aggregator.add_tick(asset_id, new_price, normalized_vader)
 
                 await append_latest_candle(asset_id)
                 await check_alerts_for_asset(asset_id, new_price, sentiment_score)
@@ -916,3 +956,20 @@ async def check_alerts_for_asset(
                     condition,
                     asset_id,
                 )
+
+
+async def hourly_aggregation_loop() -> None:
+    """
+    Background worker that triggers the in-memory aggregator flush once an hour.
+    """
+    from backend.app.services.aggregator import aggregator
+
+    while True:
+        try:
+            # Sleep for 1 hour (3600 seconds)
+            await asyncio.sleep(3600.0)
+            await aggregator.aggregate_and_flush()
+        except asyncio.CancelledError:
+            break
+        except Exception as exc:
+            logger.error("hourly_aggregation_loop_error: %s", str(exc))

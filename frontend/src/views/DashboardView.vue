@@ -8,6 +8,7 @@ import { Sliders, Eye, EyeOff, RotateCcw, LayoutGrid } from '@lucide/vue'
 import type { RouteAssetId } from '@/types/market'
 
 // Lazy-load heavy widgets to divide chunks and speed up TTI
+const SentimentHeatmap = defineAsyncComponent(() => import('@/components/dashboard/SentimentHeatmap.vue'))
 const MetricsPanel = defineAsyncComponent(() => import('@/components/dashboard/MetricsPanel.vue'))
 const SentimentChart = defineAsyncComponent(() => import('@/components/dashboard/SentimentChart.vue'))
 const LiveFeed = defineAsyncComponent(() => import('@/components/dashboard/LiveFeed.vue'))
@@ -21,7 +22,7 @@ const assetId = computed(() => route.params.id as RouteAssetId)
 
 // Define Layout Types and Defaults
 export interface WidgetLayout {
-  id: 'metrics' | 'chart' | 'feed'
+  id: 'heatmap' | 'metrics' | 'chart' | 'feed'
   title: string
   visible: boolean
   collapsed: boolean
@@ -31,9 +32,10 @@ export interface WidgetLayout {
 const LAYOUT_CACHE_KEY = 'dashboard_widgets_layout_v1'
 
 const defaultLayout: WidgetLayout[] = [
-  { id: 'metrics', title: 'Market Price Metrics', visible: true, collapsed: false, order: 1 },
-  { id: 'chart', title: 'Interactive Overlay Chart', visible: true, collapsed: false, order: 2 },
-  { id: 'feed', title: 'Live Sentiment Feed', visible: true, collapsed: false, order: 3 }
+  { id: 'heatmap', title: 'Market Sentiment Heatmap', visible: true, collapsed: false, order: 1 },
+  { id: 'metrics', title: 'Market Price Metrics', visible: true, collapsed: false, order: 2 },
+  { id: 'chart', title: 'Interactive Overlay Chart', visible: true, collapsed: false, order: 3 },
+  { id: 'feed', title: 'Live Sentiment Feed', visible: true, collapsed: false, order: 4 }
 ]
 
 const layouts = ref<WidgetLayout[]>([])
@@ -78,7 +80,7 @@ function saveLayout(): void {
 }
 
 /** Toggles the visibility of a widget. */
-function toggleWidgetVisibility(id: 'metrics' | 'chart' | 'feed'): void {
+function toggleWidgetVisibility(id: 'heatmap' | 'metrics' | 'chart' | 'feed'): void {
   const widget = layouts.value.find(w => w.id === id)
   if (widget) {
     widget.visible = !widget.visible
@@ -253,6 +255,20 @@ const mainRowGridClass = computed(() => {
       <!-- Loop widgets matching their User Sorted Order configurations -->
       <template v-for="widget in layouts" :key="widget.id">
         
+        <!-- SECTION 0: Sentiment Heatmap (renders if ordered, full width) -->
+        <div 
+          v-if="widget.id === 'heatmap' && widget.visible"
+          class="w-full transition-all duration-300 min-w-0"
+          :style="{ order: widget.order }"
+        >
+          <Suspense>
+            <SentimentHeatmap />
+            <template #fallback>
+              <div class="glass-card rounded-3xl border border-border/40 h-32 animate-pulse" />
+            </template>
+          </Suspense>
+        </div>
+
         <!-- SECTION 1: Metrics panel (renders if ordered before or after chart/feed, full width) -->
         <div 
           v-if="widget.id === 'metrics' && widget.visible"

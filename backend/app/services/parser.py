@@ -1,5 +1,6 @@
 """
-Service layer for fetching and parsing Google News RSS feeds for assets.
+Service layer for fetching, parsing, and tagging Google News RSS feeds for assets.
+Consolidates crypto sweeps into a single unified stream and tags assets dynamically using regex.
 """
 
 import asyncio
@@ -7,10 +8,11 @@ import datetime
 import email.utils
 import hashlib
 import logging
-import urllib.parse
+import re
 import time
+import urllib.parse
 import xml.etree.ElementTree as ET
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 import httpx
 
 from backend.app.core.database import articles_collection, assets_collection
@@ -18,12 +20,14 @@ from backend.app.services.llm import analyze_article_sentiment
 
 logger = logging.getLogger("app")
 
-ASSET_QUERIES: Dict[str, str] = {
-    "BTC": "Bitcoin OR BTC",
-    "ETH": "Ethereum OR ETH",
-    "TON": "Toncoin OR TON crypto",
-    "SOL": "Solana OR SOL",
-    "AAPL": "Apple stock OR AAPL",
+# Precompiled regular expressions for high-performance multi-asset tagging
+ASSET_REGEX: Dict[str, re.Pattern[str]] = {
+    "BTC": re.compile(r"\b(bitcoin|btc)\b", re.IGNORECASE),
+    "ETH": re.compile(r"\b(ethereum|eth|ether)\b", re.IGNORECASE),
+    "TON": re.compile(r"\b(toncoin|ton|telegram open network)\b", re.IGNORECASE),
+    "SOL": re.compile(r"\b(solana|sol)\b", re.IGNORECASE),
+    "XRP": re.compile(r"\b(ripple|xrp)\b", re.IGNORECASE),
+    "ADA": re.compile(r"\b(cardano|ada)\b", re.IGNORECASE),
 }
 
 
@@ -95,7 +99,7 @@ async def fetch_rss_feed(query: str) -> Optional[str]:
         client = get_http_client()
         response = await client.get(url)
         if response.status_code == 200:
-            return response.text
+            return str(response.text)
 
         logger.warning(
             "rss_fetch_failed",
@@ -181,15 +185,155 @@ def parse_rss_xml(xml_content: str) -> List[Dict[str, Any]]:
     return articles
 
 
-async def process_rss_feed_for_asset(asset_id: str) -> None:
+async def _apply_sentiment_to_asset(asset_id: str, sentiment_score: float) -> None:
     """
-    Ingests and processes the latest RSS feed articles for a given asset ticker.
-    Determines sentiment using the LLM engine and persists updates.
+    Applies calculated sentiment shift reactively to the asset metrics (price/sentiment label),
+    persists in MongoDB, and broadcasts to active WebSocket subscribers.
     """
-    query = ASSET_QUERIES.get(asset_id)
-    if not query:
+    from backend.app.services.websocket_manager import manager as ws_manager
+
+    asset = await assets_collection.find_one({"id": asset_id})
+    if not asset:
         return
 
+    # Normalised score from -1.0 to 1.0 mapped to index from 0 to 100
+    mapped_score = int((sentiment_score + 1.0) * 50)
+
+    # Move metrics dynamically (20% weight per new article)
+    current_score = asset.get("sentimentScore", 50)
+    new_asset_score = int(current_score * 0.8 + mapped_score * 0.2)
+    new_asset_score = max(0, min(100, new_asset_score))
+
+    if new_asset_score > 60:
+        new_label = "Bullish"
+    elif new_asset_score < 40:
+        new_label = "Bearish"
+    else:
+        new_label = "Neutral"
+
+    # Apply price impact formula: higher sentiment index pushes prices up
+    change_percent = sentiment_score * 0.25
+    current_price = float(asset.get("price", 100.0))
+    new_price = max(0.01, round(current_price * (1 + change_percent / 100), 4))
+
+    high24h = max(float(asset.get("high24h", new_price)), new_price)
+    low24h = min(float(asset.get("low24h", new_price)), new_price)
+    open_price_today = float(asset.get("openPriceToday", new_price))
+    if open_price_today == 0.0:
+        open_price_today = new_price
+    change24h = round(((new_price - open_price_today) / open_price_today) * 100, 2)
+
+    update_fields = {
+        "price": new_price,
+        "sentimentScore": new_asset_score,
+        "sentimentLabel": new_label,
+        "high24h": high24h,
+        "low24h": low24h,
+        "change24h": change24h,
+    }
+
+    await assets_collection.update_one(
+        {"id": asset_id},
+        {"$set": update_fields},
+    )
+
+    # Broadcast updated metrics directly to WebSocket room
+    broadcast_doc = {**asset, **update_fields}
+    broadcast_doc.pop("_id", None)
+    await ws_manager.broadcast_asset_update(asset_id, broadcast_doc)
+
+
+async def process_unified_crypto_feed() -> None:
+    """
+    Ingests, deduplicates, tags, and evaluates the unified high-frequency crypto feed.
+    Discards duplicates and duplicates matches per asset to prevent key conflicts.
+    """
+    query = (
+        "crypto OR cryptocurrency OR bitcoin OR ethereum OR solana OR toncoin OR ripple OR cardano "
+        "OR BTC OR ETH OR SOL OR TON OR XRP OR ADA"
+    )
+    xml_content = await fetch_rss_feed(query)
+    if not xml_content:
+        return
+
+    parsed_items = parse_rss_xml(xml_content)
+    new_articles_count = 0
+
+    # Limit to top 15 parsed items to prevent long blocking runs, sweeping oldest first
+    for item in parsed_items[:15]:
+        await asyncio.sleep(0.5)  # Yield loop focus
+
+        if _is_duplicate_in_window(item["title"]):
+            logger.info("rss_deduplication_hit: title=%r", item["title"])
+            continue
+
+        # Match text against regex mappings to identify tagged assets
+        matched_assets = []
+        text_signature = f"{item['title']} {item['summary']}".lower()
+
+        for asset_id, pattern in ASSET_REGEX.items():
+            if pattern.search(text_signature):
+                matched_assets.append(asset_id)
+
+        # Skip if no assets match
+        if not matched_assets:
+            continue
+
+        url_hash = _md5_hash(item["url"])
+
+        # Loop through matches and process separately for each asset
+        for asset_id in matched_assets:
+            # Composite primary key: ID is guaranteed unique per asset-article pairing
+            # Perfectly avoids MongoDB DuplicateKeyErrors on multi-asset mentions
+            article_id = f"art_{asset_id}_{url_hash}"
+
+            existing = await articles_collection.find_one({"id": article_id})
+            if existing:
+                continue
+
+            # Run deterministic sentiment evaluation
+            sentiment_data = await analyze_article_sentiment(
+                title=item["title"], summary=item["summary"], asset_symbol=asset_id
+            )
+
+            try:
+                ts_dt = datetime.datetime.fromisoformat(item["timestamp"])
+            except ValueError:
+                ts_dt = datetime.datetime.now(datetime.timezone.utc)
+
+            article_doc = {
+                "id": article_id,
+                "asset_id": asset_id,
+                "timestamp": item["timestamp"],
+                "timestamp_dt": ts_dt,
+                "source": item["source"],
+                "title": item["title"],
+                "url": item["url"],
+                "summary": item["summary"],
+                "sentimentScore": sentiment_data["sentimentScore"],
+                "sentimentLabel": sentiment_data["sentimentLabel"],
+                "confidence": sentiment_data["confidence"],
+                "keywords": sentiment_data["keywords"],
+                "llmReasoning": sentiment_data["reasoning"],
+            }
+
+            await articles_collection.insert_one(article_doc)
+            new_articles_count += 1
+
+            # Adjust prices and sentiment reactively
+            await _apply_sentiment_to_asset(asset_id, sentiment_data["sentimentScore"])
+
+    if new_articles_count > 0:
+        logger.info(
+            "rss_unified_crypto_sweep_complete: enqueued=%d", new_articles_count
+        )
+
+
+async def process_aapl_feed() -> None:
+    """
+    Ingests and processes isolated stock RSS feeds for AAPL.
+    """
+    query = "Apple stock OR AAPL"
     xml_content = await fetch_rss_feed(query)
     if not xml_content:
         return
@@ -198,26 +342,23 @@ async def process_rss_feed_for_asset(asset_id: str) -> None:
     new_articles_count = 0
 
     for item in parsed_items[:3]:
-        # Yield control to let event loop handle websocket read/write tasks cleanly
         await asyncio.sleep(0.5)
 
-        # Time-window sliding filter to protect against redundant database checks & LLM requests
         if _is_duplicate_in_window(item["title"]):
             logger.info("rss_deduplication_hit: title=%r", item["title"])
             continue
 
-        article_url = item["url"]
-        article_id = f"art_{_md5_hash(article_url)}"
+        url_hash = _md5_hash(item["url"])
+        article_id = f"art_AAPL_{url_hash}"
 
         existing = await articles_collection.find_one({"id": article_id})
         if existing:
             continue
 
         sentiment_data = await analyze_article_sentiment(
-            title=item["title"], summary=item["summary"], asset_symbol=asset_id
+            title=item["title"], summary=item["summary"], asset_symbol="AAPL"
         )
 
-        # Parse the ISO timestamp string back into a datetime for the TTL index field
         try:
             ts_dt = datetime.datetime.fromisoformat(item["timestamp"])
         except ValueError:
@@ -225,12 +366,12 @@ async def process_rss_feed_for_asset(asset_id: str) -> None:
 
         article_doc = {
             "id": article_id,
-            "asset_id": asset_id,
+            "asset_id": "AAPL",
             "timestamp": item["timestamp"],
             "timestamp_dt": ts_dt,
             "source": item["source"],
             "title": item["title"],
-            "url": article_url,
+            "url": item["url"],
             "summary": item["summary"],
             "sentimentScore": sentiment_data["sentimentScore"],
             "sentimentLabel": sentiment_data["sentimentLabel"],
@@ -242,76 +383,34 @@ async def process_rss_feed_for_asset(asset_id: str) -> None:
         await articles_collection.insert_one(article_doc)
         new_articles_count += 1
 
-        # Adjust price and sentiment indices reactively based on news results
-        asset = await assets_collection.find_one({"id": asset_id})
-        if asset:
-            sentiment_score = sentiment_data["sentimentScore"]
-            mapped_score = int((sentiment_score + 1.0) * 50)
-
-            # Move metrics dynamically (20% weight per new article)
-            current_score = asset.get("sentimentScore", 50)
-            new_asset_score = int(current_score * 0.8 + mapped_score * 0.2)
-            new_asset_score = max(0, min(100, new_asset_score))
-
-            if new_asset_score > 60:
-                new_label = "Bullish"
-            elif new_asset_score < 40:
-                new_label = "Bearish"
-            else:
-                new_label = "Neutral"
-
-            # Apply price impact formula: higher sentiment index pushes prices up
-            change_percent = sentiment_score * 0.25
-            current_price = asset.get("price", 100.0)
-            new_price = max(0.01, round(current_price * (1 + change_percent / 100), 2))
-
-            high24h = max(float(asset.get("high24h", new_price)), new_price)
-            low24h = min(float(asset.get("low24h", new_price)), new_price)
-            open_price_today = float(asset.get("openPriceToday", new_price))
-            if open_price_today == 0.0:
-                open_price_today = new_price
-            change24h = round(
-                ((new_price - open_price_today) / open_price_today) * 100, 2
-            )
-
-            await assets_collection.update_one(
-                {"id": asset_id},
-                {
-                    "$set": {
-                        "price": new_price,
-                        "sentimentScore": new_asset_score,
-                        "sentimentLabel": new_label,
-                        "high24h": high24h,
-                        "low24h": low24h,
-                        "change24h": change24h,
-                    }
-                },
-            )
+        await _apply_sentiment_to_asset("AAPL", sentiment_data["sentimentScore"])
 
     if new_articles_count > 0:
-        logger.info(
-            "rss_sweep_ingested",
-            extra={"asset_id": asset_id, "count": new_articles_count},
-        )
+        logger.info("rss_aapl_sweep_complete: enqueued=%d", new_articles_count)
 
 
 async def rss_parser_loop() -> None:
     """
-    Background worker loop pulling Google News updates periodically.
+    Background worker loop periodic ingestion.
+    Runs unified crypto and isolated AAPL feeds sequentially.
     """
     await asyncio.sleep(5.0)  # Initial boot cooldown
 
     while True:
         try:
             logger.info("rss_sweep_start")
-            for asset_id in ASSET_QUERIES.keys():
-                await process_rss_feed_for_asset(asset_id)
-                await asyncio.sleep(2.0)  # Sequential delay to avoid rate limits
+
+            # 1. Consolidated crypto sweeps
+            await process_unified_crypto_feed()
+            await asyncio.sleep(2.0)
+
+            # 2. Apple Inc. isolated sweep
+            await process_aapl_feed()
 
             logger.info("rss_sweep_complete")
             await asyncio.sleep(60.0)
         except asyncio.CancelledError:
             break
         except Exception as exc:
-            logger.error("rss_loop_error", extra={"error": str(exc)})
+            logger.error("rss_loop_error: %s", str(exc))
             await asyncio.sleep(60.0)
