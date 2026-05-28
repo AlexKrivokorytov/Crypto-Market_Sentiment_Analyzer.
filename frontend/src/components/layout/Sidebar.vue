@@ -17,7 +17,7 @@ const { sidebarCollapsed, mobileMenuOpen } = storeToRefs(store)
 const selectedAssetId = computed(() => route.params.id as string)
 
 const { data: assets, isLoading } = useAssets()
-const { data: config } = useBackendConfig()
+const { data: config, isLoading: configLoading, isError: configError } = useBackendConfig()
 
 const formatCurrency = (val: number, symbol: string) => {
   const options =
@@ -171,22 +171,49 @@ function handleLogout(): void {
     <div class="p-4 border-t border-border/40 flex flex-col gap-2 overflow-hidden">
       <!-- LLM status -->
       <div class="flex items-center gap-3" :class="[sidebarCollapsed ? 'justify-center' : '']">
-        <div class="h-8 w-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0">
-          <Cpu class="h-4 w-4 text-indigo-400 animate-pulse" />
+        <div 
+          class="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 border"
+          :class="[
+            configError 
+              ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' 
+              : configLoading 
+              ? 'bg-blue-500/10 border-blue-500/20 text-blue-400 animate-pulse' 
+              : config?.llm_configured 
+              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+              : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+          ]"
+        >
+          <Cpu class="h-4 w-4" :class="[!configError ? 'animate-pulse' : '']" />
         </div>
         <div class="flex flex-col min-w-0 transition-all duration-200" :class="[sidebarCollapsed ? 'opacity-0 w-0 scale-95 pointer-events-none' : 'opacity-100 w-auto scale-100']">
           <span class="text-xs font-semibold text-foreground truncate">
-            {{ config?.llm_model || 'Loading model...' }}
+            {{ configError ? 'Server Offline' : configLoading ? 'Connecting...' : (config?.llm_model || 'Simulated Model') }}
           </span>
           <span
             class="text-[10px] font-medium flex items-center gap-1"
-            :class="[config?.llm_configured ? 'text-emerald-400' : 'text-amber-400']"
+            :class="[
+              configError 
+                ? 'text-rose-400' 
+                : configLoading 
+                ? 'text-blue-400' 
+                : config?.llm_configured 
+                ? 'text-emerald-400' 
+                : 'text-amber-400'
+            ]"
           >
             <span
               class="h-1.5 w-1.5 rounded-full animate-ping"
-              :class="[config?.llm_configured ? 'bg-emerald-400' : 'bg-amber-400']"
+              :class="[
+                configError 
+                  ? 'bg-rose-400' 
+                  : configLoading 
+                  ? 'bg-blue-400' 
+                  : config?.llm_configured 
+                  ? 'bg-emerald-400' 
+                  : 'bg-amber-400'
+              ]"
             ></span>
-            {{ config?.llm_configured ? 'Live AI Active' : 'Simulation Mode' }}
+            {{ configError ? 'Backend Unreachable' : configLoading ? 'Checking API...' : (config?.llm_configured ? 'Live AI Active' : 'Simulation Mode') }}
           </span>
         </div>
       </div>

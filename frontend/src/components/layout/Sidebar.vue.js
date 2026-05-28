@@ -14,7 +14,7 @@ const { sidebarCollapsed, mobileMenuOpen } = storeToRefs(store);
 /** The currently active asset ticker, derived from the URL. */
 const selectedAssetId = computed(() => route.params.id);
 const { data: assets, isLoading } = useAssets();
-const { data: config } = useBackendConfig();
+const { data: config, isLoading: configLoading, isError: configError } = useBackendConfig();
 const formatCurrency = (val, symbol) => {
     const options = symbol === 'AAPL'
         ? { minimumFractionDigits: 2, maximumFractionDigits: 2 }
@@ -210,16 +210,27 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
     ...{ class: ([__VLS_ctx.sidebarCollapsed ? 'justify-center' : '']) },
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-    ...{ class: "h-8 w-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0" },
+    ...{ class: "h-8 w-8 rounded-lg flex items-center justify-center shrink-0 border" },
+    ...{ class: ([
+            __VLS_ctx.configError
+                ? 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+                : __VLS_ctx.configLoading
+                    ? 'bg-blue-500/10 border-blue-500/20 text-blue-400 animate-pulse'
+                    : __VLS_ctx.config?.llm_configured
+                        ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                        : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+        ]) },
 });
 const __VLS_8 = {}.Cpu;
 /** @type {[typeof __VLS_components.Cpu, ]} */ ;
 // @ts-ignore
 const __VLS_9 = __VLS_asFunctionalComponent(__VLS_8, new __VLS_8({
-    ...{ class: "h-4 w-4 text-indigo-400 animate-pulse" },
+    ...{ class: "h-4 w-4" },
+    ...{ class: ([!__VLS_ctx.configError ? 'animate-pulse' : '']) },
 }));
 const __VLS_10 = __VLS_9({
-    ...{ class: "h-4 w-4 text-indigo-400 animate-pulse" },
+    ...{ class: "h-4 w-4" },
+    ...{ class: ([!__VLS_ctx.configError ? 'animate-pulse' : '']) },
 }, ...__VLS_functionalComponentArgsRest(__VLS_9));
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "flex flex-col min-w-0 transition-all duration-200" },
@@ -228,16 +239,32 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
     ...{ class: "text-xs font-semibold text-foreground truncate" },
 });
-(__VLS_ctx.config?.llm_model || 'Loading model...');
+(__VLS_ctx.configError ? 'Server Offline' : __VLS_ctx.configLoading ? 'Connecting...' : (__VLS_ctx.config?.llm_model || 'Simulated Model'));
 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
     ...{ class: "text-[10px] font-medium flex items-center gap-1" },
-    ...{ class: ([__VLS_ctx.config?.llm_configured ? 'text-emerald-400' : 'text-amber-400']) },
+    ...{ class: ([
+            __VLS_ctx.configError
+                ? 'text-rose-400'
+                : __VLS_ctx.configLoading
+                    ? 'text-blue-400'
+                    : __VLS_ctx.config?.llm_configured
+                        ? 'text-emerald-400'
+                        : 'text-amber-400'
+        ]) },
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
     ...{ class: "h-1.5 w-1.5 rounded-full animate-ping" },
-    ...{ class: ([__VLS_ctx.config?.llm_configured ? 'bg-emerald-400' : 'bg-amber-400']) },
+    ...{ class: ([
+            __VLS_ctx.configError
+                ? 'bg-rose-400'
+                : __VLS_ctx.configLoading
+                    ? 'bg-blue-400'
+                    : __VLS_ctx.config?.llm_configured
+                        ? 'bg-emerald-400'
+                        : 'bg-amber-400'
+        ]) },
 });
-(__VLS_ctx.config?.llm_configured ? 'Live AI Active' : 'Simulation Mode');
+(__VLS_ctx.configError ? 'Backend Unreachable' : __VLS_ctx.configLoading ? 'Checking API...' : (__VLS_ctx.config?.llm_configured ? 'Live AI Active' : 'Simulation Mode'));
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: ([__VLS_ctx.sidebarCollapsed ? 'hidden' : 'block']) },
 });
@@ -467,17 +494,13 @@ else {
 /** @type {__VLS_StyleScopedClasses['h-8']} */ ;
 /** @type {__VLS_StyleScopedClasses['w-8']} */ ;
 /** @type {__VLS_StyleScopedClasses['rounded-lg']} */ ;
-/** @type {__VLS_StyleScopedClasses['bg-indigo-500/10']} */ ;
-/** @type {__VLS_StyleScopedClasses['border']} */ ;
-/** @type {__VLS_StyleScopedClasses['border-indigo-500/20']} */ ;
 /** @type {__VLS_StyleScopedClasses['flex']} */ ;
 /** @type {__VLS_StyleScopedClasses['items-center']} */ ;
 /** @type {__VLS_StyleScopedClasses['justify-center']} */ ;
 /** @type {__VLS_StyleScopedClasses['shrink-0']} */ ;
+/** @type {__VLS_StyleScopedClasses['border']} */ ;
 /** @type {__VLS_StyleScopedClasses['h-4']} */ ;
 /** @type {__VLS_StyleScopedClasses['w-4']} */ ;
-/** @type {__VLS_StyleScopedClasses['text-indigo-400']} */ ;
-/** @type {__VLS_StyleScopedClasses['animate-pulse']} */ ;
 /** @type {__VLS_StyleScopedClasses['flex']} */ ;
 /** @type {__VLS_StyleScopedClasses['flex-col']} */ ;
 /** @type {__VLS_StyleScopedClasses['min-w-0']} */ ;
@@ -540,6 +563,8 @@ const __VLS_self = (await import('vue')).defineComponent({
             assets: assets,
             isLoading: isLoading,
             config: config,
+            configLoading: configLoading,
+            configError: configError,
             formatCurrency: formatCurrency,
             selectAsset: selectAsset,
             handleLogout: handleLogout,

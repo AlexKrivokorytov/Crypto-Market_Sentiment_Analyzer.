@@ -165,6 +165,12 @@ if (__VLS_ctx.isExpanded) {
     const __VLS_22 = __VLS_21({
         ...{ class: "h-3.5 w-3.5 text-primary" },
     }, ...__VLS_functionalComponentArgsRest(__VLS_21));
+    if (__VLS_ctx.isSimulated) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "p-3 rounded-xl bg-amber-500/5 border border-amber-500/10 text-[10px] text-amber-500/90 leading-relaxed" },
+        });
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+    }
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         ...{ class: "text-xs text-slate-400 leading-relaxed font-medium" },
     });
@@ -317,6 +323,14 @@ if (__VLS_ctx.isExpanded) {
 /** @type {__VLS_StyleScopedClasses['h-3.5']} */ ;
 /** @type {__VLS_StyleScopedClasses['w-3.5']} */ ;
 /** @type {__VLS_StyleScopedClasses['text-primary']} */ ;
+/** @type {__VLS_StyleScopedClasses['p-3']} */ ;
+/** @type {__VLS_StyleScopedClasses['rounded-xl']} */ ;
+/** @type {__VLS_StyleScopedClasses['bg-amber-500/5']} */ ;
+/** @type {__VLS_StyleScopedClasses['border']} */ ;
+/** @type {__VLS_StyleScopedClasses['border-amber-500/10']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-[10px]']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-amber-500/90']} */ ;
+/** @type {__VLS_StyleScopedClasses['leading-relaxed']} */ ;
 /** @type {__VLS_StyleScopedClasses['text-xs']} */ ;
 /** @type {__VLS_StyleScopedClasses['text-slate-400']} */ ;
 /** @type {__VLS_StyleScopedClasses['leading-relaxed']} */ ;

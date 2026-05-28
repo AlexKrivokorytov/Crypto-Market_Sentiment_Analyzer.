@@ -127,6 +127,15 @@ const formatDate = (isoString: string) => {
         <MessageSquare class="h-3.5 w-3.5 text-primary" />
         Sentiment Reasoning (Chain of Thought):
       </div>
+      
+      <!-- Heuristic Explanation Banner -->
+      <div 
+        v-if="isSimulated" 
+        class="p-3 rounded-xl bg-amber-500/5 border border-amber-500/10 text-[10px] text-amber-500/90 leading-relaxed"
+      >
+        <strong>💡 Heuristic Mode:</strong> The backend is running in standalone simulation mode (no active LLM endpoint). Sentiment classification was computed instantly using optimized local natural language heuristics to keep the app fast and 100% useful.
+      </div>
+
       <p class="text-xs text-slate-400 leading-relaxed font-medium">
         {{ article.llmReasoning }}
       </p>
