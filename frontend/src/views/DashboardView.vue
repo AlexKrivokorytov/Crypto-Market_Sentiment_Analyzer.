@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { useAppStore } from '@/composables/useAppStore'
 import { storeToRefs } from 'pinia'
 import WidgetWrapper from '@/components/dashboard/WidgetWrapper.vue'
+import CryptoTickerBar from '@/components/dashboard/CryptoTickerBar.vue'
 import { Sliders, Eye, EyeOff, RotateCcw, LayoutGrid } from '@lucide/vue'
 import type { RouteAssetId } from '@/types/market'
 
@@ -12,6 +13,8 @@ const SentimentHeatmap = defineAsyncComponent(() => import('@/components/dashboa
 const MetricsPanel = defineAsyncComponent(() => import('@/components/dashboard/MetricsPanel.vue'))
 const SentimentChart = defineAsyncComponent(() => import('@/components/dashboard/SentimentChart.vue'))
 const LiveFeed = defineAsyncComponent(() => import('@/components/dashboard/LiveFeed.vue'))
+const MarketOverviewGrid = defineAsyncComponent(() => import('@/components/dashboard/MarketOverviewGrid.vue'))
+const NewsCorrelationPanel = defineAsyncComponent(() => import('@/components/dashboard/NewsCorrelationPanel.vue'))
 
 const route = useRoute()
 const store = useAppStore()
@@ -22,20 +25,21 @@ const assetId = computed(() => route.params.id as RouteAssetId)
 
 // Define Layout Types and Defaults
 export interface WidgetLayout {
-  id: 'heatmap' | 'metrics' | 'chart' | 'feed'
+  id: 'overview' | 'heatmap' | 'metrics' | 'chart' | 'feed'
   title: string
   visible: boolean
   collapsed: boolean
   order: number // Higher order values render lower
 }
 
-const LAYOUT_CACHE_KEY = 'dashboard_widgets_layout_v1'
+const LAYOUT_CACHE_KEY = 'dashboard_widgets_layout_v2'
 
 const defaultLayout: WidgetLayout[] = [
-  { id: 'heatmap', title: 'Market Sentiment Heatmap', visible: true, collapsed: false, order: 1 },
-  { id: 'metrics', title: 'Market Price Metrics', visible: true, collapsed: false, order: 2 },
-  { id: 'chart', title: 'Interactive Overlay Chart', visible: true, collapsed: false, order: 3 },
-  { id: 'feed', title: 'Live Sentiment Feed', visible: true, collapsed: false, order: 4 }
+  { id: 'overview', title: 'Market Overview',          visible: true, collapsed: false, order: 1 },
+  { id: 'heatmap', title: 'Sentiment Heatmap',         visible: true, collapsed: false, order: 2 },
+  { id: 'metrics', title: 'Price Metrics',             visible: true, collapsed: false, order: 3 },
+  { id: 'chart',   title: 'Interactive Overlay Chart', visible: true, collapsed: false, order: 4 },
+  { id: 'feed',    title: 'Live Sentiment Feed',        visible: true, collapsed: false, order: 5 },
 ]
 
 const layouts = ref<WidgetLayout[]>([])
@@ -80,7 +84,7 @@ function saveLayout(): void {
 }
 
 /** Toggles the visibility of a widget. */
-function toggleWidgetVisibility(id: 'heatmap' | 'metrics' | 'chart' | 'feed'): void {
+function toggleWidgetVisibility(id: WidgetLayout['id']): void {
   const widget = layouts.value.find(w => w.id === id)
   if (widget) {
     widget.visible = !widget.visible
@@ -132,8 +136,8 @@ function handleResetLayout(): void {
 }
 
 // Compute dynamic rendering segments
-const chartWidget = computed(() => layouts.value.find(w => w.id === 'chart'))
-const feedWidget = computed(() => layouts.value.find(w => w.id === 'feed'))
+const chartWidget   = computed(() => layouts.value.find(w => w.id === 'chart'))
+const feedWidget    = computed(() => layouts.value.find(w => w.id === 'feed'))
 
 /** Sorts and filters the main lower row widgets (chart & feed) if visible. */
 const visibleMainWidgets = computed(() => {
@@ -145,27 +149,32 @@ const visibleMainWidgets = computed(() => {
 /** Computes structural CSS grids for the main body rows based on visibility configurations. */
 const mainRowGridClass = computed(() => {
   const chartVisible = chartWidget.value?.visible
-  const feedVisible = feedWidget.value?.visible
-
-  if (chartVisible && feedVisible) {
-    return 'grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 items-stretch'
-  }
+  const feedVisible  = feedWidget.value?.visible
+  if (chartVisible && feedVisible) return 'grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 items-stretch'
   return 'grid grid-cols-1 gap-4 lg:gap-6 items-stretch'
 })
 </script>
 
 <template>
-  <main class="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6 space-y-4 lg:space-y-6">
+  <main class="flex-1 overflow-y-auto space-y-4 lg:space-y-6">
+    <!-- Sticky ticker strip (always visible, no padding so it spans edge-to-edge) -->
+    <div class="sticky top-0 z-30">
+      <CryptoTickerBar />
+    </div>
+
+    <!-- Padded page body -->
+    <div class="px-3 sm:px-4 lg:px-6 pb-6 space-y-4 lg:space-y-6">
+
     <!-- Page Header & Layout Customizer Toolbar -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 select-none shrink-0 border-b border-border/10 pb-4">
       <div class="flex flex-col gap-1">
         <h1
-          class="text-xl sm:text-2xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-200 to-indigo-400 bg-clip-text text-transparent"
+          class="text-xl sm:text-2xl font-extrabold tracking-tight font-display text-gradient-crypto"
         >
           Market Intelligence Center
         </h1>
         <p class="text-xs text-slate-400 font-medium leading-relaxed">
-          Aggregated orderbook quotes overlaid with real-time LLM-processed sentiment metrics.
+          Aggregated orderbook quotes overlaid with real-time VADER-processed sentiment metrics.
         </p>
       </div>
 
@@ -176,7 +185,7 @@ const mainRowGridClass = computed(() => {
           class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-border/60 bg-slate-900/40 hover:bg-slate-900 text-xs font-semibold text-slate-300 hover:text-slate-100 transition-all shadow-md select-none cursor-pointer"
         >
           <Sliders class="h-4 w-4" />
-          <span>Настроить сетку</span>
+          <span>Customize Layout</span>
         </button>
 
         <!-- Customization Glass Panel dropdown -->
@@ -188,15 +197,15 @@ const mainRowGridClass = computed(() => {
             <div class="flex items-center justify-between border-b border-white/5 pb-2">
               <span class="text-xs font-bold text-slate-200 flex items-center gap-1.5 uppercase tracking-wider">
                 <LayoutGrid class="h-4 w-4 text-indigo-400" />
-                Виджеты дашборда
+                Dashboard Widgets
               </span>
-              <button 
+              <button
                 @click="handleResetLayout"
                 class="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-colors cursor-pointer"
-                title="Сбросить к значениям по умолчанию"
+                title="Reset to defaults"
               >
                 <RotateCcw class="h-3 w-3" />
-                Сброс
+                Reset
               </button>
             </div>
 
@@ -229,7 +238,7 @@ const mainRowGridClass = computed(() => {
                     @click="moveWidgetUp(idx)"
                     :disabled="idx === 0"
                     class="p-1 rounded hover:bg-white/5 text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
-                    title="Вверх"
+                    title="Move up"
                   >
                     ▲
                   </button>
@@ -237,7 +246,7 @@ const mainRowGridClass = computed(() => {
                     @click="moveWidgetDown(idx)"
                     :disabled="idx === layouts.length - 1"
                     class="p-1 rounded hover:bg-white/5 text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
-                    title="Вниз"
+                    title="Move down"
                   >
                     ▼
                   </button>
@@ -251,12 +260,35 @@ const mainRowGridClass = computed(() => {
 
     <!-- Active dynamic Grid Canvas -->
     <div class="flex flex-col gap-4 lg:gap-6 min-w-0">
-      
+
       <!-- Loop widgets matching their User Sorted Order configurations -->
       <template v-for="widget in layouts" :key="widget.id">
-        
+
+        <!-- SECTION –1: Market Overview Bento Grid (full width) -->
+        <div
+          v-if="widget.id === 'overview' && widget.visible"
+          class="w-full transition-all duration-300 min-w-0"
+          :style="{ order: widget.order }"
+        >
+          <WidgetWrapper
+            :title="widget.title"
+            :widget-id="widget.id"
+            v-model:collapsed="widget.collapsed"
+            @hide="toggleWidgetVisibility(widget.id)"
+          >
+            <Suspense>
+              <MarketOverviewGrid />
+              <template #fallback>
+                <div class="grid grid-cols-4 gap-3 h-24">
+                  <div v-for="i in 7" :key="i" class="rounded-2xl animate-pulse" style="background: rgba(255,255,255,0.03)" />
+                </div>
+              </template>
+            </Suspense>
+          </WidgetWrapper>
+        </div>
+
         <!-- SECTION 0: Sentiment Heatmap (renders if ordered, full width) -->
-        <div 
+        <div
           v-if="widget.id === 'heatmap' && widget.visible"
           class="w-full transition-all duration-300 min-w-0"
           :style="{ order: widget.order }"
@@ -333,24 +365,38 @@ const mainRowGridClass = computed(() => {
             </Suspense>
           </WidgetWrapper>
 
-          <!-- Live Sentiment RSS Feed -->
-          <WidgetWrapper
+          <!-- Live Sentiment RSS Feed + News Correlation (right column) -->
+          <div
             v-else-if="widget.id === 'feed'"
-            :title="widget.title"
-            :widget-id="widget.id"
-            v-model:collapsed="widget.collapsed"
-            @hide="toggleWidgetVisibility(widget.id)"
+            class="flex flex-col gap-4 h-full"
           >
+            <WidgetWrapper
+              :title="widget.title"
+              :widget-id="widget.id"
+              v-model:collapsed="widget.collapsed"
+              @hide="toggleWidgetVisibility(widget.id)"
+            >
+              <Suspense>
+                <LiveFeed :asset-id="assetId" />
+                <template #fallback>
+                  <div class="glass-card rounded-3xl border border-border/40 h-[450px] sm:h-[550px] animate-pulse" />
+                </template>
+              </Suspense>
+            </WidgetWrapper>
+
+            <!-- News Correlation Panel — stacked below feed, always visible -->
             <Suspense>
-              <LiveFeed :asset-id="assetId" />
+              <NewsCorrelationPanel :asset-id="assetId" />
               <template #fallback>
-                <div class="glass-card rounded-3xl border border-border/40 h-[450px] sm:h-[550px] lg:h-full animate-pulse" />
+                <div class="glass-card rounded-3xl border border-border/40 h-48 animate-pulse" />
               </template>
             </Suspense>
-          </WidgetWrapper>
+          </div>
         </div>
       </div>
     </div>
+
+    </div><!-- end padded body -->
   </main>
 </template>
 

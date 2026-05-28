@@ -59,7 +59,7 @@ const showEmptyState = computed(() => !isLoading.value && filteredArticles.value
         <div>
           <h2 class="text-sm font-bold text-slate-100">Live Sentiment Feed</h2>
           <p class="text-[10px] text-slate-400 font-semibold leading-tight mt-0.5">
-            Real-time RSS news analysis processed by LLM.
+            Real-time RSS news analysis processed by VADER engine.
           </p>
         </div>
       </div>
@@ -95,13 +95,13 @@ const showEmptyState = computed(() => !isLoading.value && filteredArticles.value
     >
       <div class="flex items-center gap-2">
         <AlertTriangle class="h-4 w-4 text-amber-400 shrink-0" />
-        <span>Бэкенд временно недоступен. Отображаются сохраненные статьи.</span>
+        <span>Backend temporarily unavailable. Showing cached articles.</span>
       </div>
       <button 
         @click="refetch()" 
         class="px-2 py-1 rounded bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-200 transition-all font-semibold uppercase text-[9px]"
       >
-        Обновить
+        Retry
       </button>
     </div>
 
