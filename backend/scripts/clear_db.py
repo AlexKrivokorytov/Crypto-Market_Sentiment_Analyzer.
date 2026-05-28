@@ -1,22 +1,22 @@
 """
-Utility script to clear MongoDB collections for assets and articles.
+Utility script to wipe the MongoDB database completely.
 Enables fresh seed execution and LLM news parser sweeps.
 """
 
 import asyncio
 import sys
-from backend.app.core.database import db
+from backend.app.core.database import client
+from backend.app.core.config import settings
 
 
 async def clear_database() -> None:
     """
-    Drops the articles and assets collections from MongoDB.
+    Drops the entire database from MongoDB.
     """
-    print("Dropping 'articles' collection...")
-    await db["articles"].drop()
-    print("Dropping 'assets' collection...")
-    await db["assets"].drop()
-    print("Database collections cleared successfully!")
+    db_name = settings.MONGODB_DB_NAME
+    print(f"Dropping database '{db_name}'...")
+    await client.drop_database(db_name)
+    print("Database cleared completely successfully!")
 
 
 if __name__ == "__main__":

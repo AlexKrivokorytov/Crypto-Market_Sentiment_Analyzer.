@@ -2,9 +2,10 @@
 Pydantic v2 schemas for authentication and user management.
 """
 
+import re
 from typing import List, Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 class UserCreate(BaseModel):
@@ -19,6 +20,18 @@ class UserCreate(BaseModel):
     display_name: str = Field(
         ..., min_length=1, max_length=64, description="User display name."
     )
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        """
+        Enforce password strength: minimum 8 characters, at least one letter and one number.
+        """
+        if not re.search(r"[A-Za-z]", v):
+            raise ValueError("Password must contain at least one letter.")
+        if not re.search(r"\d", v):
+            raise ValueError("Password must contain at least one number.")
+        return v
 
 
 class UserPublic(BaseModel):

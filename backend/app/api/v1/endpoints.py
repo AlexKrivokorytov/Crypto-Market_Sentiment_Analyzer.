@@ -223,7 +223,8 @@ async def get_config() -> Dict[str, Any]:
     status_code=status.HTTP_201_CREATED,
     summary="Register a new user",
 )
-async def register(payload: UserCreate) -> UserPublic:
+@limiter.limit("10/minute")
+async def register(request: Request, payload: UserCreate) -> UserPublic:
     """
     Creates a new user account.
 
@@ -250,7 +251,8 @@ async def register(payload: UserCreate) -> UserPublic:
     status_code=status.HTTP_200_OK,
     summary="Login and receive a JWT token",
 )
-async def login(payload: LoginRequest) -> TokenResponse:
+@limiter.limit("10/minute")
+async def login(request: Request, payload: LoginRequest) -> TokenResponse:
     """
     Authenticates a user and issues a signed JWT access token.
 

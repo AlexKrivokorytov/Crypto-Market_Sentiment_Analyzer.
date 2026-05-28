@@ -81,7 +81,7 @@ function handleLogout(): void {
         v-for="asset in assets"
         :key="asset.id"
         @click="selectAsset(asset.id)"
-        class="w-full text-left p-3 rounded-xl flex items-center transition-all duration-200 border group"
+        class="w-full text-left p-3 rounded-xl flex items-center border group hover-scale-premium"
         :class="[
           selectedAssetId === asset.id
             ? 'glass-card border-primary/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_20px_-5px_rgba(99,102,241,0.15)] text-foreground'
@@ -140,7 +140,7 @@ function handleLogout(): void {
     <div class="px-3 pb-1">
       <button
         id="sidebar-portfolio-link"
-        class="w-full text-left p-3 rounded-xl flex items-center gap-3 transition-all duration-200 border group"
+        class="w-full text-left p-3 rounded-xl flex items-center gap-3 border group hover-scale-premium"
         :class="[
           route.name === 'portfolio'
             ? 'glass-card border-primary/30 text-foreground'

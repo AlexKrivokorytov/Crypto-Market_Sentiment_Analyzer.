@@ -56,6 +56,14 @@ async function handleSubmit(): Promise<void> {
     <div class="orb orb--violet" />
     <div class="orb orb--cyan" />
 
+    <!-- Escape pathway button -->
+    <RouterLink to="/asset/BTC" class="auth-back-btn" aria-label="Back to Dashboard">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" class="back-icon" aria-hidden="true">
+        <path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+      <span>Back to Dashboard</span>
+    </RouterLink>
+
     <section class="auth-card" aria-label="Create a SentimentAI account">
       <div class="auth-logo">
         <svg width="40" height="40" viewBox="0 0 40 40" fill="none" aria-hidden="true">

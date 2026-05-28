@@ -97,7 +97,7 @@ else {
                     __VLS_ctx.selectAsset(asset.id);
                 } },
             key: (asset.id),
-            ...{ class: "w-full text-left p-3 rounded-xl flex items-center transition-all duration-200 border group" },
+            ...{ class: "w-full text-left p-3 rounded-xl flex items-center border group hover-scale-premium" },
             ...{ class: ([
                     __VLS_ctx.selectedAssetId === asset.id
                         ? 'glass-card border-primary/30 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05),0_0_20px_-5px_rgba(99,102,241,0.15)] text-foreground'
@@ -167,7 +167,7 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElement
             __VLS_ctx.store.closeMobileMenu();
         } },
     id: "sidebar-portfolio-link",
-    ...{ class: "w-full text-left p-3 rounded-xl flex items-center gap-3 transition-all duration-200 border group" },
+    ...{ class: "w-full text-left p-3 rounded-xl flex items-center gap-3 border group hover-scale-premium" },
     ...{ class: ([
             __VLS_ctx.route.name === 'portfolio'
                 ? 'glass-card border-primary/30 text-foreground'
@@ -401,10 +401,9 @@ else {
 /** @type {__VLS_StyleScopedClasses['rounded-xl']} */ ;
 /** @type {__VLS_StyleScopedClasses['flex']} */ ;
 /** @type {__VLS_StyleScopedClasses['items-center']} */ ;
-/** @type {__VLS_StyleScopedClasses['transition-all']} */ ;
-/** @type {__VLS_StyleScopedClasses['duration-200']} */ ;
 /** @type {__VLS_StyleScopedClasses['border']} */ ;
 /** @type {__VLS_StyleScopedClasses['group']} */ ;
+/** @type {__VLS_StyleScopedClasses['hover-scale-premium']} */ ;
 /** @type {__VLS_StyleScopedClasses['h-9']} */ ;
 /** @type {__VLS_StyleScopedClasses['w-9']} */ ;
 /** @type {__VLS_StyleScopedClasses['rounded-lg']} */ ;
@@ -464,10 +463,9 @@ else {
 /** @type {__VLS_StyleScopedClasses['flex']} */ ;
 /** @type {__VLS_StyleScopedClasses['items-center']} */ ;
 /** @type {__VLS_StyleScopedClasses['gap-3']} */ ;
-/** @type {__VLS_StyleScopedClasses['transition-all']} */ ;
-/** @type {__VLS_StyleScopedClasses['duration-200']} */ ;
 /** @type {__VLS_StyleScopedClasses['border']} */ ;
 /** @type {__VLS_StyleScopedClasses['group']} */ ;
+/** @type {__VLS_StyleScopedClasses['hover-scale-premium']} */ ;
 /** @type {__VLS_StyleScopedClasses['h-9']} */ ;
 /** @type {__VLS_StyleScopedClasses['w-9']} */ ;
 /** @type {__VLS_StyleScopedClasses['rounded-lg']} */ ;
