@@ -25,8 +25,15 @@ class AssetMetrics(BaseModel):
     sentimentLabel: str = Field(
         ..., description="Sentiment label (e.g. Bullish, Bearish, Neutral)"
     )
+    openPriceToday: float = Field(
+        ..., description="Opening price at the start of the current UTC day in USD"
+    )
+    lastDayReset: str = Field(
+        ..., description="ISO 8601 timestamp when openPriceToday was last reset"
+    )
 
     model_config = ConfigDict(from_attributes=True)
+
 
 
 class HistoricalDataPoint(BaseModel):

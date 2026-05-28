@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAppStore } from '@/composables/useAppStore'
+import { useAuthStore } from '@/composables/useAuthStore'
 import { useAssets, useBackendConfig } from '@/composables/useMarketData'
 import { Activity, Cpu, TrendingDown, TrendingUp } from '@lucide/vue'
 import { storeToRefs } from 'pinia'
@@ -9,6 +10,7 @@ import { storeToRefs } from 'pinia'
 const router = useRouter()
 const route = useRoute()
 const store = useAppStore()
+const authStore = useAuthStore()
 const { sidebarCollapsed, mobileMenuOpen } = storeToRefs(store)
 
 /** The currently active asset ticker, derived from the URL. */
@@ -28,6 +30,13 @@ const formatCurrency = (val: number, symbol: string) => {
 /** Navigates to the selected asset route and closes the mobile Drawer. */
 const selectAsset = (assetId: string): void => {
   router.push(`/asset/${assetId}`)
+  store.closeMobileMenu()
+}
+
+/** Logs out and navigates to the login page. */
+function handleLogout(): void {
+  authStore.logout()
+  router.push('/login')
   store.closeMobileMenu()
 }
 </script>
@@ -127,9 +136,41 @@ const selectAsset = (assetId: string): void => {
       </button>
     </div>
 
+    <!-- Portfolio nav link -->
+    <div class="px-3 pb-1">
+      <button
+        id="sidebar-portfolio-link"
+        class="w-full text-left p-3 rounded-xl flex items-center gap-3 transition-all duration-200 border group"
+        :class="[
+          route.name === 'portfolio'
+            ? 'glass-card border-primary/30 text-foreground'
+            : 'border-transparent text-muted-foreground hover:bg-muted/30 hover:text-foreground'
+        ]"
+        @click="router.push('/portfolio'); store.closeMobileMenu()"
+        aria-label="Go to Portfolio"
+      >
+        <div
+          class="h-9 w-9 rounded-lg flex items-center justify-center font-bold text-xs shrink-0"
+          :class="route.name === 'portfolio' ? 'bg-primary/20 text-white border border-primary/30' : 'bg-muted/50 border border-border/40 text-muted-foreground'"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M2 5.5h12M2 5.5v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-7M2 5.5V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1.5" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/>
+            <path d="M6 3V2.5a2 2 0 0 1 4 0V3" stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <span
+          class="font-semibold text-sm transition-all duration-200"
+          :class="[sidebarCollapsed ? 'opacity-0 w-0 scale-95 pointer-events-none' : 'opacity-100 scale-100']"
+        >
+          Portfolio
+        </span>
+      </button>
+    </div>
+
     <!-- Sidebar Footer -->
-    <div class="p-4 border-t border-border/40 flex items-center overflow-hidden">
-      <div class="flex items-center gap-3 w-full" :class="[sidebarCollapsed ? 'justify-center' : '']">
+    <div class="p-4 border-t border-border/40 flex flex-col gap-2 overflow-hidden">
+      <!-- LLM status -->
+      <div class="flex items-center gap-3" :class="[sidebarCollapsed ? 'justify-center' : '']">
         <div class="h-8 w-8 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0">
           <Cpu class="h-4 w-4 text-indigo-400 animate-pulse" />
         </div>
@@ -137,17 +178,45 @@ const selectAsset = (assetId: string): void => {
           <span class="text-xs font-semibold text-foreground truncate">
             {{ config?.llm_model || 'Loading model...' }}
           </span>
-          <span 
+          <span
             class="text-[10px] font-medium flex items-center gap-1"
             :class="[config?.llm_configured ? 'text-emerald-400' : 'text-amber-400']"
           >
-            <span 
+            <span
               class="h-1.5 w-1.5 rounded-full animate-ping"
               :class="[config?.llm_configured ? 'bg-emerald-400' : 'bg-amber-400']"
             ></span>
             {{ config?.llm_configured ? 'Live AI Active' : 'Simulation Mode' }}
           </span>
         </div>
+      </div>
+
+      <!-- Auth: Login / Logout -->
+      <div :class="[sidebarCollapsed ? 'hidden' : 'block']">
+        <button
+          v-if="authStore.isAuthenticated"
+          id="sidebar-logout-btn"
+          class="w-full flex items-center gap-2 p-2 rounded-lg text-xs font-medium text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-all duration-150"
+          @click="handleLogout"
+          aria-label="Log out"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path d="M5.5 2H3a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h2.5M9.5 10l2.5-3-2.5-3M12 7H5.5" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Sign out ({{ authStore.user?.display_name }})
+        </button>
+        <button
+          v-else
+          id="sidebar-login-btn"
+          class="w-full flex items-center gap-2 p-2 rounded-lg text-xs font-medium text-muted-foreground hover:text-indigo-400 hover:bg-indigo-500/10 transition-all duration-150"
+          @click="router.push('/login')"
+          aria-label="Sign in"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path d="M8.5 2H11a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H8.5M4.5 10l-2.5-3 2.5-3M2 7h6.5" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Sign in
+        </button>
       </div>
     </div>
   </aside>

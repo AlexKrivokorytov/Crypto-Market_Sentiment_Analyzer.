@@ -134,6 +134,7 @@ def parse_rss_xml(xml_content: str) -> List[Dict[str, Any]]:
                     "summary": summary,
                     "source": source,
                     "timestamp": timestamp.isoformat(),
+                    "timestamp_dt": timestamp,
                 }
             )
     except Exception as exc:
@@ -170,10 +171,17 @@ async def process_rss_feed_for_asset(asset_id: str) -> None:
             title=item["title"], summary=item["summary"], asset_symbol=asset_id
         )
 
+        # Parse the ISO timestamp string back into a datetime for the TTL index field
+        try:
+            ts_dt = datetime.datetime.fromisoformat(item["timestamp"])
+        except ValueError:
+            ts_dt = datetime.datetime.now(datetime.timezone.utc)
+
         article_doc = {
             "id": article_id,
             "asset_id": asset_id,
             "timestamp": item["timestamp"],
+            "timestamp_dt": ts_dt,
             "source": item["source"],
             "title": item["title"],
             "url": article_url,
@@ -211,9 +219,14 @@ async def process_rss_feed_for_asset(asset_id: str) -> None:
             current_price = asset.get("price", 100.0)
             new_price = max(0.01, round(current_price * (1 + change_percent / 100), 2))
 
-            high24h = max(asset.get("high24h", new_price), new_price)
-            low24h = min(asset.get("low24h", new_price), new_price)
-            change24h = round(asset.get("change24h", 0.0) + change_percent, 2)
+            high24h = max(float(asset.get("high24h", new_price)), new_price)
+            low24h = min(float(asset.get("low24h", new_price)), new_price)
+            open_price_today = float(asset.get("openPriceToday", new_price))
+            if open_price_today == 0.0:
+                open_price_today = new_price
+            change24h = round(
+                ((new_price - open_price_today) / open_price_today) * 100, 2
+            )
 
             await assets_collection.update_one(
                 {"id": asset_id},

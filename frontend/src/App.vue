@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { onErrorCaptured } from 'vue'
-import { RouterView } from 'vue-router'
+import { RouterView, useRoute } from 'vue-router'
 import Sidebar from '@/components/layout/Sidebar.vue'
 import Header from '@/components/layout/Header.vue'
 import { useAppStore } from '@/composables/useAppStore'
@@ -8,6 +9,15 @@ import { storeToRefs } from 'pinia'
 
 const store = useAppStore()
 const { mobileMenuOpen } = storeToRefs(store)
+const route = useRoute()
+
+/**
+ * Auth and portfolio routes use a full-page layout without the sidebar and header.
+ * Login and Register routes have requiresGuest meta; portfolio has requiresAuth meta.
+ */
+const isFullPage = computed<boolean>(
+  () => !!(route.meta.requiresGuest || route.name === 'portfolio')
+)
 
 /**
  * Global error boundary. Catches any unhandled render errors from child
@@ -21,7 +31,11 @@ onErrorCaptured((error: Error, instance, info: string) => {
 </script>
 
 <template>
-  <div class="flex h-screen w-screen overflow-hidden bg-[#05070f] text-slate-100 font-sans">
+  <!-- Auth pages: full-page glass layout, no sidebar -->
+  <RouterView v-if="isFullPage" />
+
+  <!-- Authenticated app shell: sidebar + header + routed content -->
+  <div v-else class="flex h-screen w-screen overflow-hidden bg-[#05070f] text-slate-100 font-sans">
     <!-- Sidebar (desktop: static, mobile: Drawer overlay) -->
     <Sidebar />
 
@@ -38,7 +52,7 @@ onErrorCaptured((error: Error, instance, info: string) => {
     <!-- Main Content Column -->
     <div class="flex-1 flex flex-col min-w-0 h-full relative">
       <Header />
-      <!-- Routed page content (DashboardView or NotFoundView) -->
+      <!-- Routed page content (DashboardView, PortfolioView, NotFoundView…) -->
       <RouterView />
     </div>
   </div>

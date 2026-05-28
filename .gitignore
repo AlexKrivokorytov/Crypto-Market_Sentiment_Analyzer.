@@ -53,3 +53,6 @@ Thumbs.db
 # Project temporary build artifacts
 README_utf8.md
 *.tmp
+
+# IDE-generated Vue debug artefacts (not source files)
+**/*.vue.js

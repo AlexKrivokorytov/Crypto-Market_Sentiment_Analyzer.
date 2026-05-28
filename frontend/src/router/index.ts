@@ -3,12 +3,16 @@
  *
  * Routes:
  *   /             → redirect to /asset/BTC
- *   /asset/:id    → DashboardView (lazy-loaded)
+ *   /asset/:id    → DashboardView (public)
+ *   /login        → LoginView (guest only — redirects authenticated users)
+ *   /register     → RegisterView (guest only — redirects authenticated users)
+ *   /portfolio    → PortfolioView (requires auth)
  *   *             → NotFoundView
  *
- * The `beforeEach` guard validates the `:id` parameter against the set of
- * known asset tickers. Invalid tickers are silently redirected to the default
- * asset (/asset/BTC) instead of rendering a broken dashboard.
+ * Navigation guards:
+ *   - Asset routes: validates `:id` against known tickers.
+ *   - Auth routes (`requiresGuest`): redirects authenticated users to dashboard.
+ *   - Protected routes (`requiresAuth`): redirects unauthenticated users to login.
  */
 
 import { createRouter, createWebHistory } from 'vue-router'
@@ -31,6 +35,24 @@ const routes: RouteRecordRaw[] = [
     meta: { title: 'Dashboard' },
   },
   {
+    path: '/login',
+    name: 'login',
+    component: () => import('@/views/LoginView.vue'),
+    meta: { title: 'Sign In', requiresGuest: true },
+  },
+  {
+    path: '/register',
+    name: 'register',
+    component: () => import('@/views/RegisterView.vue'),
+    meta: { title: 'Create Account', requiresGuest: true },
+  },
+  {
+    path: '/portfolio',
+    name: 'portfolio',
+    component: () => import('@/views/PortfolioView.vue'),
+    meta: { title: 'Portfolio', requiresAuth: true },
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'not-found',
     component: () => import('@/views/NotFoundView.vue'),
@@ -45,19 +67,36 @@ const router = createRouter({
 })
 
 /**
- * Navigation guard that validates the asset `:id` route parameter.
- * Redirects to the default asset if an unknown ticker is supplied.
+ * Navigation guard that:
+ *   1. Validates asset `:id` route parameters.
+ *   2. Redirects authenticated users away from guest-only routes.
+ *   3. Redirects unauthenticated users away from protected routes.
  */
 router.beforeEach((to) => {
+  // Asset ID validation guard
   if (to.name === 'dashboard') {
     const id = to.params.id as string
     if (!VALID_ASSET_IDS.has(id as RouteAssetId)) {
       return { name: 'dashboard', params: { id: DEFAULT_ASSET }, replace: true }
     }
   }
+
+  // Lazy import to avoid circular dependency at module load time
+  const { useAuthStore } = require('@/composables/useAuthStore')
+  const authStore = useAuthStore()
+
+  // Guest-only routes: redirect to dashboard if already authenticated
+  if (to.meta.requiresGuest && authStore.isAuthenticated) {
+    return { name: 'dashboard', params: { id: DEFAULT_ASSET }, replace: true }
+  }
+
+  // Protected routes: redirect to login if not authenticated
+  if (to.meta.requiresAuth && !authStore.isAuthenticated) {
+    return { name: 'login', query: { redirect: to.fullPath }, replace: true }
+  }
+
   return true
 })
-
 
 export { DEFAULT_ASSET, VALID_ASSET_IDS }
 export default router

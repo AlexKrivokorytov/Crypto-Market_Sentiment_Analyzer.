@@ -4,6 +4,9 @@ export type RouteAssetId = 'BTC' | 'ETH' | 'SOL' | 'AAPL'
 /** Sentiment classification label produced by the LLM analysis engine. */
 export type SentimentLabel = 'Bullish' | 'Bearish' | 'Neutral'
 
+/** Alert condition trigger types. */
+export type AlertConditionType = 'PRICE_ABOVE' | 'PRICE_BELOW' | 'SENTIMENT_CHANGE'
+
 export interface AssetMetrics {
   id: RouteAssetId
   name: string
@@ -16,6 +19,10 @@ export interface AssetMetrics {
   /** Aggregated sentiment index in the range 0–100. */
   sentimentScore: number
   sentimentLabel: SentimentLabel
+  /** Opening price at the start of today (UTC), used for change24h calculation. */
+  openPriceToday: number
+  /** ISO 8601 timestamp when openPriceToday was last reset. */
+  lastDayReset: string
 }
 
 export interface HistoricalDataPoint {
@@ -44,4 +51,41 @@ export interface SentimentArticle {
   confidence: number
   keywords: string[]
   llmReasoning: string
+}
+
+export interface UserPublic {
+  id: string
+  email: string
+  display_name: string
+  watchlist: string[]
+}
+
+export interface TokenResponse {
+  access_token: string
+  token_type: 'bearer'
+  user: UserPublic
+}
+
+export interface AlertCondition {
+  id: string
+  asset_id: string
+  condition: AlertConditionType
+  target_value: number
+  triggered: boolean
+}
+
+export interface PortfolioPosition {
+  asset_id: string
+  asset_name: string
+  quantity: number
+  avg_buy_price: number
+  current_price: number
+  pnl_usd: number
+  pnl_pct: number
+}
+
+/** WebSocket push message for live asset price updates. */
+export interface AssetUpdateMessage {
+  type: 'asset_update'
+  asset: AssetMetrics
 }

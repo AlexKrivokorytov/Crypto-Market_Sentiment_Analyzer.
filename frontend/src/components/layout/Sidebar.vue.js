@@ -2,12 +2,14 @@
 import { computed } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useAppStore } from '@/composables/useAppStore';
+import { useAuthStore } from '@/composables/useAuthStore';
 import { useAssets, useBackendConfig } from '@/composables/useMarketData';
 import { Activity, Cpu, TrendingDown, TrendingUp } from '@lucide/vue';
 import { storeToRefs } from 'pinia';
 const router = useRouter();
 const route = useRoute();
 const store = useAppStore();
+const authStore = useAuthStore();
 const { sidebarCollapsed, mobileMenuOpen } = storeToRefs(store);
 /** The currently active asset ticker, derived from the URL. */
 const selectedAssetId = computed(() => route.params.id);
@@ -24,6 +26,12 @@ const selectAsset = (assetId) => {
     router.push(`/asset/${assetId}`);
     store.closeMobileMenu();
 };
+/** Logs out and navigates to the login page. */
+function handleLogout() {
+    authStore.logout();
+    router.push('/login');
+    store.closeMobileMenu();
+}
 debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_ctx = {};
 let __VLS_components;
@@ -151,10 +159,54 @@ else {
     }
 }
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-    ...{ class: "p-4 border-t border-border/40 flex items-center overflow-hidden" },
+    ...{ class: "px-3 pb-1" },
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+    ...{ onClick: (...[$event]) => {
+            __VLS_ctx.router.push('/portfolio');
+            __VLS_ctx.store.closeMobileMenu();
+        } },
+    id: "sidebar-portfolio-link",
+    ...{ class: "w-full text-left p-3 rounded-xl flex items-center gap-3 transition-all duration-200 border group" },
+    ...{ class: ([
+            __VLS_ctx.route.name === 'portfolio'
+                ? 'glass-card border-primary/30 text-foreground'
+                : 'border-transparent text-muted-foreground hover:bg-muted/30 hover:text-foreground'
+        ]) },
+    'aria-label': "Go to Portfolio",
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-    ...{ class: "flex items-center gap-3 w-full" },
+    ...{ class: "h-9 w-9 rounded-lg flex items-center justify-center font-bold text-xs shrink-0" },
+    ...{ class: (__VLS_ctx.route.name === 'portfolio' ? 'bg-primary/20 text-white border border-primary/30' : 'bg-muted/50 border border-border/40 text-muted-foreground') },
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.svg, __VLS_intrinsicElements.svg)({
+    width: "16",
+    height: "16",
+    viewBox: "0 0 16 16",
+    fill: "none",
+    'aria-hidden': "true",
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.path)({
+    d: "M2 5.5h12M2 5.5v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-7M2 5.5V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1.5",
+    stroke: "currentColor",
+    'stroke-width': "1.25",
+    'stroke-linecap': "round",
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.path)({
+    d: "M6 3V2.5a2 2 0 0 1 4 0V3",
+    stroke: "currentColor",
+    'stroke-width': "1.25",
+    'stroke-linecap': "round",
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.span)({
+    ...{ class: "font-semibold text-sm transition-all duration-200" },
+    ...{ class: ([__VLS_ctx.sidebarCollapsed ? 'opacity-0 w-0 scale-95 pointer-events-none' : 'opacity-100 scale-100']) },
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    ...{ class: "p-4 border-t border-border/40 flex flex-col gap-2 overflow-hidden" },
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    ...{ class: "flex items-center gap-3" },
     ...{ class: ([__VLS_ctx.sidebarCollapsed ? 'justify-center' : '']) },
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -186,6 +238,58 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.
     ...{ class: ([__VLS_ctx.config?.llm_configured ? 'bg-emerald-400' : 'bg-amber-400']) },
 });
 (__VLS_ctx.config?.llm_configured ? 'Live AI Active' : 'Simulation Mode');
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    ...{ class: ([__VLS_ctx.sidebarCollapsed ? 'hidden' : 'block']) },
+});
+if (__VLS_ctx.authStore.isAuthenticated) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (__VLS_ctx.handleLogout) },
+        id: "sidebar-logout-btn",
+        ...{ class: "w-full flex items-center gap-2 p-2 rounded-lg text-xs font-medium text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-all duration-150" },
+        'aria-label': "Log out",
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.svg, __VLS_intrinsicElements.svg)({
+        width: "14",
+        height: "14",
+        viewBox: "0 0 14 14",
+        fill: "none",
+        'aria-hidden': "true",
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.path)({
+        d: "M5.5 2H3a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h2.5M9.5 10l2.5-3-2.5-3M12 7H5.5",
+        stroke: "currentColor",
+        'stroke-width': "1.25",
+        'stroke-linecap': "round",
+        'stroke-linejoin': "round",
+    });
+    (__VLS_ctx.authStore.user?.display_name);
+}
+else {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (...[$event]) => {
+                if (!!(__VLS_ctx.authStore.isAuthenticated))
+                    return;
+                __VLS_ctx.router.push('/login');
+            } },
+        id: "sidebar-login-btn",
+        ...{ class: "w-full flex items-center gap-2 p-2 rounded-lg text-xs font-medium text-muted-foreground hover:text-indigo-400 hover:bg-indigo-500/10 transition-all duration-150" },
+        'aria-label': "Sign in",
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.svg, __VLS_intrinsicElements.svg)({
+        width: "14",
+        height: "14",
+        viewBox: "0 0 14 14",
+        fill: "none",
+        'aria-hidden': "true",
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.path)({
+        d: "M8.5 2H11a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H8.5M4.5 10l-2.5-3 2.5-3M2 7h6.5",
+        stroke: "currentColor",
+        'stroke-width': "1.25",
+        'stroke-linecap': "round",
+        'stroke-linejoin': "round",
+    });
+}
 /** @type {__VLS_StyleScopedClasses['glass-panel']} */ ;
 /** @type {__VLS_StyleScopedClasses['border-r']} */ ;
 /** @type {__VLS_StyleScopedClasses['border-border/40']} */ ;
@@ -324,16 +428,42 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.
 /** @type {__VLS_StyleScopedClasses['w-3']} */ ;
 /** @type {__VLS_StyleScopedClasses['mr-0.5']} */ ;
 /** @type {__VLS_StyleScopedClasses['shrink-0']} */ ;
+/** @type {__VLS_StyleScopedClasses['px-3']} */ ;
+/** @type {__VLS_StyleScopedClasses['pb-1']} */ ;
+/** @type {__VLS_StyleScopedClasses['w-full']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-left']} */ ;
+/** @type {__VLS_StyleScopedClasses['p-3']} */ ;
+/** @type {__VLS_StyleScopedClasses['rounded-xl']} */ ;
+/** @type {__VLS_StyleScopedClasses['flex']} */ ;
+/** @type {__VLS_StyleScopedClasses['items-center']} */ ;
+/** @type {__VLS_StyleScopedClasses['gap-3']} */ ;
+/** @type {__VLS_StyleScopedClasses['transition-all']} */ ;
+/** @type {__VLS_StyleScopedClasses['duration-200']} */ ;
+/** @type {__VLS_StyleScopedClasses['border']} */ ;
+/** @type {__VLS_StyleScopedClasses['group']} */ ;
+/** @type {__VLS_StyleScopedClasses['h-9']} */ ;
+/** @type {__VLS_StyleScopedClasses['w-9']} */ ;
+/** @type {__VLS_StyleScopedClasses['rounded-lg']} */ ;
+/** @type {__VLS_StyleScopedClasses['flex']} */ ;
+/** @type {__VLS_StyleScopedClasses['items-center']} */ ;
+/** @type {__VLS_StyleScopedClasses['justify-center']} */ ;
+/** @type {__VLS_StyleScopedClasses['font-bold']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-xs']} */ ;
+/** @type {__VLS_StyleScopedClasses['shrink-0']} */ ;
+/** @type {__VLS_StyleScopedClasses['font-semibold']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-sm']} */ ;
+/** @type {__VLS_StyleScopedClasses['transition-all']} */ ;
+/** @type {__VLS_StyleScopedClasses['duration-200']} */ ;
 /** @type {__VLS_StyleScopedClasses['p-4']} */ ;
 /** @type {__VLS_StyleScopedClasses['border-t']} */ ;
 /** @type {__VLS_StyleScopedClasses['border-border/40']} */ ;
 /** @type {__VLS_StyleScopedClasses['flex']} */ ;
-/** @type {__VLS_StyleScopedClasses['items-center']} */ ;
+/** @type {__VLS_StyleScopedClasses['flex-col']} */ ;
+/** @type {__VLS_StyleScopedClasses['gap-2']} */ ;
 /** @type {__VLS_StyleScopedClasses['overflow-hidden']} */ ;
 /** @type {__VLS_StyleScopedClasses['flex']} */ ;
 /** @type {__VLS_StyleScopedClasses['items-center']} */ ;
 /** @type {__VLS_StyleScopedClasses['gap-3']} */ ;
-/** @type {__VLS_StyleScopedClasses['w-full']} */ ;
 /** @type {__VLS_StyleScopedClasses['h-8']} */ ;
 /** @type {__VLS_StyleScopedClasses['w-8']} */ ;
 /** @type {__VLS_StyleScopedClasses['rounded-lg']} */ ;
@@ -366,6 +496,32 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.span, __VLS_intrinsicElements.
 /** @type {__VLS_StyleScopedClasses['w-1.5']} */ ;
 /** @type {__VLS_StyleScopedClasses['rounded-full']} */ ;
 /** @type {__VLS_StyleScopedClasses['animate-ping']} */ ;
+/** @type {__VLS_StyleScopedClasses['w-full']} */ ;
+/** @type {__VLS_StyleScopedClasses['flex']} */ ;
+/** @type {__VLS_StyleScopedClasses['items-center']} */ ;
+/** @type {__VLS_StyleScopedClasses['gap-2']} */ ;
+/** @type {__VLS_StyleScopedClasses['p-2']} */ ;
+/** @type {__VLS_StyleScopedClasses['rounded-lg']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-xs']} */ ;
+/** @type {__VLS_StyleScopedClasses['font-medium']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-muted-foreground']} */ ;
+/** @type {__VLS_StyleScopedClasses['hover:text-red-400']} */ ;
+/** @type {__VLS_StyleScopedClasses['hover:bg-red-500/10']} */ ;
+/** @type {__VLS_StyleScopedClasses['transition-all']} */ ;
+/** @type {__VLS_StyleScopedClasses['duration-150']} */ ;
+/** @type {__VLS_StyleScopedClasses['w-full']} */ ;
+/** @type {__VLS_StyleScopedClasses['flex']} */ ;
+/** @type {__VLS_StyleScopedClasses['items-center']} */ ;
+/** @type {__VLS_StyleScopedClasses['gap-2']} */ ;
+/** @type {__VLS_StyleScopedClasses['p-2']} */ ;
+/** @type {__VLS_StyleScopedClasses['rounded-lg']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-xs']} */ ;
+/** @type {__VLS_StyleScopedClasses['font-medium']} */ ;
+/** @type {__VLS_StyleScopedClasses['text-muted-foreground']} */ ;
+/** @type {__VLS_StyleScopedClasses['hover:text-indigo-400']} */ ;
+/** @type {__VLS_StyleScopedClasses['hover:bg-indigo-500/10']} */ ;
+/** @type {__VLS_StyleScopedClasses['transition-all']} */ ;
+/** @type {__VLS_StyleScopedClasses['duration-150']} */ ;
 var __VLS_dollars;
 const __VLS_self = (await import('vue')).defineComponent({
     setup() {
@@ -374,6 +530,10 @@ const __VLS_self = (await import('vue')).defineComponent({
             Cpu: Cpu,
             TrendingDown: TrendingDown,
             TrendingUp: TrendingUp,
+            router: router,
+            route: route,
+            store: store,
+            authStore: authStore,
             sidebarCollapsed: sidebarCollapsed,
             mobileMenuOpen: mobileMenuOpen,
             selectedAssetId: selectedAssetId,
@@ -382,6 +542,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             config: config,
             formatCurrency: formatCurrency,
             selectAsset: selectAsset,
+            handleLogout: handleLogout,
         };
     },
 });
