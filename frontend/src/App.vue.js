@@ -10,10 +10,10 @@ const store = useAppStore();
 const { mobileMenuOpen } = storeToRefs(store);
 const route = useRoute();
 /**
- * Auth and portfolio routes use a full-page layout without the sidebar and header.
- * Login and Register routes have requiresGuest meta; portfolio has requiresAuth meta.
+ * Guest-only auth routes (Login/Register) use a full-page layout without the sidebar and header.
+ * They have the requiresGuest meta flag.
  */
-const isFullPage = computed(() => !!(route.meta.requiresGuest || route.name === 'portfolio'));
+const isFullPage = computed(() => !!route.meta.requiresGuest);
 /**
  * Global error boundary. Catches any unhandled render errors from child
  * components, logs them with context, and returns false to prevent Vue

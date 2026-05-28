@@ -12,11 +12,11 @@ const { mobileMenuOpen } = storeToRefs(store)
 const route = useRoute()
 
 /**
- * Auth and portfolio routes use a full-page layout without the sidebar and header.
- * Login and Register routes have requiresGuest meta; portfolio has requiresAuth meta.
+ * Guest-only auth routes (Login/Register) use a full-page layout without the sidebar and header.
+ * They have the requiresGuest meta flag.
  */
 const isFullPage = computed<boolean>(
-  () => !!(route.meta.requiresGuest || route.name === 'portfolio')
+  () => !!route.meta.requiresGuest
 )
 
 /**

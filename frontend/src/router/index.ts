@@ -18,6 +18,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 import type { RouteAssetId } from '@/types/market'
+import { useAuthStore } from '@/composables/useAuthStore'
 
 const VALID_ASSET_IDS = new Set<RouteAssetId>(['BTC', 'ETH', 'SOL', 'AAPL'])
 
@@ -81,8 +82,6 @@ router.beforeEach((to) => {
     }
   }
 
-  // Lazy import to avoid circular dependency at module load time
-  const { useAuthStore } = require('@/composables/useAuthStore')
   const authStore = useAuthStore()
 
   // Guest-only routes: redirect to dashboard if already authenticated

@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import type { RouteAssetId } from '@/types/market'
 import { useAppStore } from '@/composables/useAppStore'
 import { storeToRefs } from 'pinia'
+import { useAssetWebSocket } from '@/composables/useAssetWebSocket'
 
 /**
  * The DashboardView derives the active asset ID from the URL parameter `:id`
@@ -24,6 +25,9 @@ const { timeframe } = storeToRefs(store)
 
 /** The current asset ID is always authoritative from the URL, not from store. */
 const assetId = computed(() => route.params.id as RouteAssetId)
+
+// Initialize WebSocket connection for real-time asset updates
+useAssetWebSocket(assetId)
 </script>
 
 <template>

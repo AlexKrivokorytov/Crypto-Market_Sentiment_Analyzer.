@@ -7,11 +7,11 @@ and watchlist management using the Motor async MongoDB driver.
 
 import datetime
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from bson import ObjectId
-from jose import JWTError, jwt
-from passlib.context import CryptContext
+from jose import JWTError, jwt  # type: ignore[import-untyped]
+from passlib.context import CryptContext  # type: ignore[import-untyped]
 
 from backend.app.core.config import settings
 from backend.app.core.database import users_collection
@@ -37,7 +37,7 @@ def hash_password(plain_password: str) -> str:
     Returns:
         The bcrypt-hashed password string.
     """
-    return _pwd_context.hash(plain_password)
+    return str(_pwd_context.hash(plain_password))
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -53,7 +53,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     Returns:
         True if the password matches, False otherwise.
     """
-    return _pwd_context.verify(plain_password, hashed_password)
+    return bool(_pwd_context.verify(plain_password, hashed_password))
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -75,7 +75,9 @@ def create_access_token(user_id: str) -> str:
         minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
     )
     payload = {"sub": user_id, "exp": expire}
-    return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    return str(
+        jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    )
 
 
 def decode_access_token(token: str) -> Optional[str]:

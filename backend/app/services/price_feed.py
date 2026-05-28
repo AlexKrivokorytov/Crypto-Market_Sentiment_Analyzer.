@@ -14,7 +14,7 @@ Phase 2 integration:
 
 import asyncio
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
 
 import httpx
 
@@ -29,10 +29,10 @@ COINGECKO_IDS: Dict[str, str] = {
 }
 
 _COINGECKO_BASE = "https://api.coingecko.com/api/v3"
-_COINGECKO_PRICES_TTL = 60       # seconds
-_COINGECKO_OHLCV_TTL = 300      # seconds
-_AAPL_TTL = 60                   # seconds
-_RATE_LIMIT_RETRY_WAIT = 10.0   # seconds to wait on 429
+_COINGECKO_PRICES_TTL = 60  # seconds
+_COINGECKO_OHLCV_TTL = 300  # seconds
+_AAPL_TTL = 60  # seconds
+_RATE_LIMIT_RETRY_WAIT = 10.0  # seconds to wait on 429
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -61,7 +61,7 @@ async def fetch_coingecko_prices() -> Dict[str, Dict[str, float]]:
     cache_key = "coingecko_prices"
     cached = cache.get(cache_key)
     if cached is not None:
-        return cached  # type: ignore[return-value]
+        return cast(Dict[str, Dict[str, float]], cached)
 
     url = f"{_COINGECKO_BASE}/coins/markets"
     params = {
@@ -92,9 +92,7 @@ async def fetch_coingecko_prices() -> Dict[str, Dict[str, float]]:
         }
 
     cache.set(cache_key, result, _COINGECKO_PRICES_TTL)
-    logger.info(
-        "coingecko_prices_fetched: symbols=%s", list(result.keys())
-    )
+    logger.info("coingecko_prices_fetched: symbols=%s", list(result.keys()))
     return result
 
 
@@ -124,7 +122,7 @@ async def fetch_coingecko_ohlcv(asset_id: str, days: int) -> List[List[float]]:
     cache_key = f"coingecko_ohlcv_{asset_id}_{days}"
     cached = cache.get(cache_key)
     if cached is not None:
-        return cached  # type: ignore[return-value]
+        return cast(List[List[float]], cached)
 
     url = f"{_COINGECKO_BASE}/coins/{coin_id}/ohlc"
     params = {"vs_currency": "usd", "days": str(days)}
@@ -149,7 +147,9 @@ async def _coingecko_get(
     params: Dict[str, str],
 ) -> httpx.Response:
     """
-    Issues a GET request to the CoinGecko API with one retry on HTTP 429.
+    Issues a GET request to the CoinGecko API with robust retry logic on HTTP 429.
+
+    Supports up to 3 attempts with exponential backoff (e.g. 10s -> 20s delay).
 
     Args:
         client: Shared httpx async client.
@@ -160,23 +160,41 @@ async def _coingecko_get(
         The successful httpx.Response.
 
     Raises:
-        httpx.HTTPStatusError: If the response is non-2xx after the retry.
+        httpx.HTTPStatusError: If the response is non-2xx after retries.
     """
-    response = await client.get(url, params=params)
+    max_retries = 3
+    retry_delay = _RATE_LIMIT_RETRY_WAIT
+    response = None
 
-    if response.status_code == 429:
-        logger.warning(
-            "coingecko_rate_limited: url=%s retrying_in=%.1fs", url, _RATE_LIMIT_RETRY_WAIT
-        )
-        await asyncio.sleep(_RATE_LIMIT_RETRY_WAIT)
+    for attempt in range(max_retries):
         response = await client.get(url, params=params)
 
-    if not response.is_success:
+        if response.status_code == 429:
+            if attempt == max_retries - 1:
+                break
+
+            logger.warning(
+                "coingecko_rate_limited: url=%s attempt=%d/%d retrying_in=%.1fs",
+                url,
+                attempt + 1,
+                max_retries,
+                retry_delay,
+            )
+            await asyncio.sleep(retry_delay)
+            retry_delay *= 2.0  # Exponential backoff
+            continue
+
+        return response
+
+    # If we exited the loop and got an unsuccessful response, raise it
+    if response is None or not response.is_success:
+        status_code = response.status_code if response else "Unknown"
+        response_text = response.text if response else ""
         raise httpx.HTTPStatusError(
-            f"CoinGecko request failed: status_code={response.status_code} "
-            f"url={url} body={response.text!r}",
-            request=response.request,
-            response=response,
+            f"CoinGecko request failed: status_code={status_code} "
+            f"url={url} body={response_text!r}",
+            request=response.request if response else httpx.Request("GET", url),
+            response=response if response else httpx.Response(500),
         )
 
     return response
@@ -207,15 +225,19 @@ def _fetch_aapl_sync() -> Dict[str, float]:
 
     current_price: float = float(fast.last_price or fast.previous_close or 0.0)
     if current_price == 0.0:
-        raise RuntimeError(
-            "fetch_aapl_sync: yfinance returned no price data for AAPL"
-        )
+        raise RuntimeError("fetch_aapl_sync: yfinance returned no price data for AAPL")
 
     prev_close: float = float(fast.previous_close or current_price)
-    change24h = round(((current_price - prev_close) / prev_close) * 100, 2) if prev_close else 0.0
+    change24h = (
+        round(((current_price - prev_close) / prev_close) * 100, 2)
+        if prev_close
+        else 0.0
+    )
 
     # Download 2 days to get today's high/low/volume
-    hist = yf.download("AAPL", period="2d", interval="1d", progress=False, auto_adjust=True)
+    hist = yf.download(
+        "AAPL", period="2d", interval="1d", progress=False, auto_adjust=True
+    )
     high24h = current_price
     low24h = current_price
     volume24h = 0
@@ -252,7 +274,7 @@ async def fetch_aapl_price() -> Dict[str, float]:
     cache_key = "aapl_price"
     cached = cache.get(cache_key)
     if cached is not None:
-        return cached  # type: ignore[return-value]
+        return cast(Dict[str, float], cached)
 
     loop = asyncio.get_event_loop()
     try:
@@ -262,5 +284,7 @@ async def fetch_aapl_price() -> Dict[str, float]:
         raise
 
     cache.set(cache_key, data, _AAPL_TTL)
-    logger.info("aapl_price_fetched: price=%s change24h=%s", data["price"], data["change24h"])
+    logger.info(
+        "aapl_price_fetched: price=%s change24h=%s", data["price"], data["change24h"]
+    )
     return data

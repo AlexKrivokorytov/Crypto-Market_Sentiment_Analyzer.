@@ -2,7 +2,6 @@
 Database connection module for MongoDB using motor.
 """
 
-import datetime
 from typing import Any, Dict
 
 import pymongo

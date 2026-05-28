@@ -3,6 +3,7 @@ import { defineAsyncComponent, computed } from 'vue';
 import { useRoute } from 'vue-router';
 import { useAppStore } from '@/composables/useAppStore';
 import { storeToRefs } from 'pinia';
+import { useAssetWebSocket } from '@/composables/useAssetWebSocket';
 /**
  * The DashboardView derives the active asset ID from the URL parameter `:id`
  * rather than from Pinia, making each asset URL fully bookmarkable and shareable.
@@ -19,6 +20,8 @@ const store = useAppStore();
 const { timeframe } = storeToRefs(store);
 /** The current asset ID is always authoritative from the URL, not from store. */
 const assetId = computed(() => route.params.id);
+// Initialize WebSocket connection for real-time asset updates
+useAssetWebSocket(assetId);
 debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_ctx = {};
 let __VLS_components;

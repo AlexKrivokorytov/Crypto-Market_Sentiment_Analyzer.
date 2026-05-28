@@ -138,7 +138,9 @@ class MockCursor:
         Returns:
             Self, with data sorted in place.
         """
-        sort_key = key if isinstance(key, str) else key[0][0] if key else "timestamp_unix"
+        sort_key = (
+            key if isinstance(key, str) else key[0][0] if key else "timestamp_unix"
+        )
         self.data = sorted(
             self.data,
             key=lambda x: x.get(sort_key, ""),
@@ -170,7 +172,12 @@ db.articles_collection.find_one = AsyncMock(
 db.historical_collection = MagicMock()
 db.historical_collection.find = MagicMock(
     side_effect=lambda query, *args, **kwargs: MockCursor(
-        [c for c in mock_candles_aapl_24h if c["asset_id"] == query.get("asset_id") and c["timeframe"] == query.get("timeframe")]
+        [
+            c
+            for c in mock_candles_aapl_24h
+            if c["asset_id"] == query.get("asset_id")
+            and c["timeframe"] == query.get("timeframe")
+        ]
     )
 )
 db.historical_collection.count_documents = AsyncMock(return_value=24)

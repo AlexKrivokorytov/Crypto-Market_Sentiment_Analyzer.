@@ -2,7 +2,7 @@
 Pydantic v2 schemas for authentication and user management.
 """
 
-from typing import Any, Dict, List, Literal, Optional
+from typing import List, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -13,8 +13,12 @@ class UserCreate(BaseModel):
     """
 
     email: EmailStr = Field(..., description="Unique user email address.")
-    password: str = Field(..., min_length=8, description="Plain-text password, minimum 8 chars.")
-    display_name: str = Field(..., min_length=1, max_length=64, description="User display name.")
+    password: str = Field(
+        ..., min_length=8, description="Plain-text password, minimum 8 chars."
+    )
+    display_name: str = Field(
+        ..., min_length=1, max_length=64, description="User display name."
+    )
 
 
 class UserPublic(BaseModel):
@@ -25,7 +29,9 @@ class UserPublic(BaseModel):
     id: str = Field(..., description="MongoDB ObjectId as a hex string.")
     email: str = Field(..., description="User email address.")
     display_name: str = Field(..., description="User display name.")
-    watchlist: List[str] = Field(..., description="List of asset IDs the user is watching.")
+    watchlist: List[str] = Field(
+        ..., description="List of asset IDs the user is watching."
+    )
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -37,7 +43,9 @@ class TokenResponse(BaseModel):
 
     access_token: str = Field(..., description="JWT access token.")
     token_type: Literal["bearer"] = Field("bearer", description="OAuth2 token type.")
-    user: UserPublic = Field(..., description="Public profile of the authenticated user.")
+    user: UserPublic = Field(
+        ..., description="Public profile of the authenticated user."
+    )
 
 
 class LoginRequest(BaseModel):

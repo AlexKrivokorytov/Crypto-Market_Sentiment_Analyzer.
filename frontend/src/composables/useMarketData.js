@@ -25,8 +25,6 @@ export function useAssetById(assetId) {
     return useQuery({
         queryKey: ['asset', idRef],
         queryFn: () => marketApi.getAssetById(idRef.value),
-        refetchInterval: 10000,
-        staleTime: 9000,
         retry: 1,
         enabled: computed(() => !!idRef.value),
     });

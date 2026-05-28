@@ -17,15 +17,18 @@ import os
 import time
 import uuid
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator, Callable, Coroutine, Dict
+from typing import Any, AsyncIterator, Callable, Coroutine, Dict, cast
 
 from fastapi import FastAPI, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from slowapi.errors import RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
 
 from backend.app.api.v1.endpoints import router as api_router
+from backend.app.core.limiter import limiter
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("app")
@@ -144,6 +147,19 @@ async def lifespan(app_inst: FastAPI) -> AsyncIterator[None]:
         log_event(logging.INFO, "db_indexes_ensured", details="MongoDB indexes ready.")
 
     if is_render:
+        from backend.app.core.config import settings
+
+        if settings.JWT_SECRET_KEY == "CHANGE_ME_IN_PRODUCTION_USE_ENV_VAR":
+            log_event(
+                logging.CRITICAL,
+                "security_config_error",
+                details="JWT_SECRET_KEY is configured with the default hardcoded fallback! "
+                "You MUST set a secure JWT_SECRET_KEY as an environment variable in the Render Dashboard.",
+            )
+            raise RuntimeError(
+                "Production startup aborted: Insecure JWT_SECRET_KEY environment variable is missing."
+            )
+
         llm_url = os.environ.get("LLM_API_URL", "")
         if not llm_url:
             log_event(
@@ -158,9 +174,7 @@ async def lifespan(app_inst: FastAPI) -> AsyncIterator[None]:
     sim_task = asyncio.create_task(
         supervised_task(background_update_loop, "background_update_loop")
     )
-    rss_task = asyncio.create_task(
-        supervised_task(rss_parser_loop, "rss_parser_loop")
-    )
+    rss_task = asyncio.create_task(supervised_task(rss_parser_loop, "rss_parser_loop"))
 
     log_event(
         logging.INFO,
@@ -191,13 +205,15 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, cast(Any, _rate_limit_exceeded_handler))
 
 origins = [
-    "http://localhost:5173",   # Vite dev server
-    "http://localhost:4173",   # Vite preview server
+    "http://localhost:5173",  # Vite dev server
+    "http://localhost:4173",  # Vite preview server
     "http://127.0.0.1:5173",
     "http://127.0.0.1:4173",
-    "http://localhost:8080",   # Docker container production port
+    "http://localhost:8080",  # Docker container production port
     "http://127.0.0.1:8080",
     "https://crypto-market-sentiment-analyzer-1.onrender.com",
 ]

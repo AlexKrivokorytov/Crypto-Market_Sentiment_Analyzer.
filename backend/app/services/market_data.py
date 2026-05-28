@@ -22,6 +22,7 @@ from backend.app.core.database import (
     historical_collection,
 )
 from backend.app.schemas.market import HistoricalDataPoint
+from backend.app.services.websocket_manager import manager as ws_manager
 
 logger = logging.getLogger("app")
 
@@ -736,20 +737,26 @@ async def background_update_loop() -> None:
             try:
                 coingecko_data = await fetch_coingecko_prices()
             except Exception as exc:
-                logger.warning("coingecko_fetch_failed: error=%s — skipping tick", str(exc))
+                logger.warning(
+                    "coingecko_fetch_failed: error=%s — skipping tick", str(exc)
+                )
                 coingecko_data = {}
 
             try:
                 aapl_data = await fetch_aapl_price()
             except Exception as exc:
-                logger.warning("aapl_fetch_failed: error=%s — skipping AAPL tick", str(exc))
+                logger.warning(
+                    "aapl_fetch_failed: error=%s — skipping AAPL tick", str(exc)
+                )
                 aapl_data = {}
 
             cursor = assets_collection.find({})
             async for asset in cursor:
                 asset_id: str = str(asset["id"])
                 current_price: float = float(asset["price"])
-                open_price_today: float = float(asset.get("openPriceToday", current_price))
+                open_price_today: float = float(
+                    asset.get("openPriceToday", current_price)
+                )
                 last_reset_str: str = str(asset.get("lastDayReset", now.isoformat()))
                 sentiment_score: int = int(asset["sentimentScore"])
 
@@ -808,6 +815,12 @@ async def background_update_loop() -> None:
 
                 await append_latest_candle(asset_id)
                 await check_alerts_for_asset(asset_id, new_price, sentiment_score)
+
+                # Fetch the freshly updated asset document and broadcast
+                updated_asset = await assets_collection.find_one({"id": asset_id})
+                if updated_asset:
+                    updated_asset.pop("_id", None)
+                    await ws_manager.broadcast_asset_update(asset_id, updated_asset)
 
         except asyncio.CancelledError:
             break

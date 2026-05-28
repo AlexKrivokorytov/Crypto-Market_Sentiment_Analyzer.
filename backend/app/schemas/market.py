@@ -2,8 +2,8 @@
 Pydantic schemas for the Market Sentiment Analyzer API.
 """
 
-from typing import List
-from pydantic import BaseModel, Field, ConfigDict
+from typing import Any, List
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 
 class AssetMetrics(BaseModel):
@@ -32,8 +32,21 @@ class AssetMetrics(BaseModel):
         ..., description="ISO 8601 timestamp when openPriceToday was last reset"
     )
 
-    model_config = ConfigDict(from_attributes=True)
+    @model_validator(mode="before")
+    @classmethod
+    def populate_defaults(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "openPriceToday" not in data:
+                data["openPriceToday"] = data.get("price", 0.0)
+            if "lastDayReset" not in data:
+                import datetime
 
+                data["lastDayReset"] = datetime.datetime.now(
+                    datetime.timezone.utc
+                ).isoformat()
+        return data
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class HistoricalDataPoint(BaseModel):

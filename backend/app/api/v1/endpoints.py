@@ -9,14 +9,30 @@ Exposes REST routes for:
   - Portfolio: /portfolio
 """
 
+import logging
 import uuid
 from typing import Any, Dict, List
 
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    status,
+    WebSocket,
+    WebSocketDisconnect,
+    Request,
+)
 
 from backend.app.api.dependencies import get_current_user
-from backend.app.core.database import assets_collection, articles_collection, users_collection
+from backend.app.services.websocket_manager import manager as ws_manager
+from backend.app.core.limiter import limiter
+from backend.app.core.database import (
+    assets_collection,
+    articles_collection,
+    users_collection,
+)
 from backend.app.schemas.auth import (
     AlertCondition,
     AlertCreateRequest,
@@ -43,6 +59,7 @@ from backend.app.services.auth import (
 from backend.app.services.market_data import get_historical_candles
 
 router = APIRouter()
+logger = logging.getLogger("app")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -56,7 +73,8 @@ router = APIRouter()
     status_code=status.HTTP_200_OK,
     summary="List all assets",
 )
-async def list_assets() -> List[AssetMetrics]:
+@limiter.limit("30/minute")
+async def list_assets(request: Request) -> List[AssetMetrics]:
     """
     Retrieves the list of all supported assets with their current metrics from MongoDB.
 
@@ -74,7 +92,8 @@ async def list_assets() -> List[AssetMetrics]:
     status_code=status.HTTP_200_OK,
     summary="Get current metrics for a specific asset",
 )
-async def get_asset_metrics(asset_id: str) -> AssetMetrics:
+@limiter.limit("30/minute")
+async def get_asset_metrics(request: Request, asset_id: str) -> AssetMetrics:
     """
     Retrieves current market price, daily high/low range, and sentiment index for a single asset.
 
@@ -102,7 +121,10 @@ async def get_asset_metrics(asset_id: str) -> AssetMetrics:
     status_code=status.HTTP_200_OK,
     summary="Get processed news articles for a specific asset",
 )
-async def get_asset_sentiment(asset_id: str) -> List[SentimentArticle]:
+@limiter.limit("30/minute")
+async def get_asset_sentiment(
+    request: Request, asset_id: str
+) -> List[SentimentArticle]:
     """
     Retrieves the list of recent news articles analyzed by the LLM for a single asset.
 
@@ -133,7 +155,9 @@ async def get_asset_sentiment(asset_id: str) -> List[SentimentArticle]:
     status_code=status.HTTP_200_OK,
     summary="Get historical price and sentiment chart points",
 )
+@limiter.limit("30/minute")
 async def get_asset_historical(
+    request: Request,
     asset_id: str,
     timeframe: str = Query("24H", description="Charts timeframe (1H, 24H, 7D, 30D)"),
 ) -> List[HistoricalDataPoint]:
@@ -343,7 +367,9 @@ async def list_alerts(
 
     doc = await users_collection.find_one({"_id": oid})
     if not doc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found."
+        )
 
     raw_alerts: List[Any] = list(doc.get("alerts", []))
     return [AlertCondition.model_validate(a) for a in raw_alerts]
@@ -472,7 +498,9 @@ async def get_portfolio(
 
     doc = await users_collection.find_one({"_id": oid})
     if not doc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found."
+        )
 
     raw_portfolio: List[Any] = list(doc.get("portfolio", []))
     if not raw_portfolio:
@@ -493,7 +521,9 @@ async def get_portfolio(
         qty = float(pos["quantity"])
         avg_buy = float(pos["avg_buy_price"])
         pnl_usd = round((current_price - avg_buy) * qty, 2)
-        pnl_pct = round(((current_price - avg_buy) / avg_buy) * 100, 2) if avg_buy else 0.0
+        pnl_pct = (
+            round(((current_price - avg_buy) / avg_buy) * 100, 2) if avg_buy else 0.0
+        )
 
         positions.append(
             PortfolioPositionResponse(
@@ -552,10 +582,14 @@ async def upsert_portfolio_position(
 
     user_doc = await users_collection.find_one({"_id": oid})
     if not user_doc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found."
+        )
 
     existing_positions: List[Any] = list(user_doc.get("portfolio", []))
-    already_exists = any(str(p["asset_id"]) == payload.asset_id for p in existing_positions)
+    already_exists = any(
+        str(p["asset_id"]) == payload.asset_id for p in existing_positions
+    )
 
     if already_exists:
         await users_collection.update_one(
@@ -634,3 +668,28 @@ async def delete_portfolio_position(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Portfolio position for '{asset_id}' not found.",
         )
+
+
+@router.websocket("/ws/{asset_id}")
+async def websocket_endpoint(websocket: WebSocket, asset_id: str) -> None:
+    """
+    WebSocket endpoint for real-time asset updates.
+
+    Accepts connections from clients wishing to subscribe to live updates
+    for a specific asset ticker. Keep-alive, connection, and disconnection
+    management are handled through ConnectionManager.
+    """
+    await ws_manager.connect(asset_id, websocket)
+    try:
+        while True:
+            # We must continuously receive messages (even if just text or keep-alive pings)
+            # to check if the client is still connected.
+            data = await websocket.receive_text()
+            # If the client sends a ping or keep-alive message, reply with a pong.
+            if data == "ping":
+                await websocket.send_text("pong")
+    except WebSocketDisconnect:
+        await ws_manager.disconnect(asset_id, websocket)
+    except Exception as exc:
+        logger.warning("websocket_error: asset_id=%s error=%s", asset_id, str(exc))
+        await ws_manager.disconnect(asset_id, websocket)

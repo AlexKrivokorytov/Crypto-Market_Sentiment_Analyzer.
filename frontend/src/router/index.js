@@ -15,6 +15,7 @@
  *   - Protected routes (`requiresAuth`): redirects unauthenticated users to login.
  */
 import { createRouter, createWebHistory } from 'vue-router';
+import { useAuthStore } from '@/composables/useAuthStore';
 const VALID_ASSET_IDS = new Set(['BTC', 'ETH', 'SOL', 'AAPL']);
 const DEFAULT_ASSET = 'BTC';
 const routes = [
@@ -72,8 +73,6 @@ router.beforeEach((to) => {
             return { name: 'dashboard', params: { id: DEFAULT_ASSET }, replace: true };
         }
     }
-    // Lazy import to avoid circular dependency at module load time
-    const { useAuthStore } = require('@/composables/useAuthStore');
     const authStore = useAuthStore();
     // Guest-only routes: redirect to dashboard if already authenticated
     if (to.meta.requiresGuest && authStore.isAuthenticated) {
