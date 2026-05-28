@@ -76,6 +76,20 @@ DEFAULT_ASSETS: List[Dict[str, Any]] = [
         "lastDayReset": _NOW_ISO,
     },
     {
+        "id": "TON",
+        "name": "Toncoin",
+        "symbol": "TON",
+        "price": 6.20,
+        "change24h": 0.0,
+        "high24h": 6.50,
+        "low24h": 6.00,
+        "volume24h": 350000000,
+        "sentimentScore": 62,
+        "sentimentLabel": "Bullish",
+        "openPriceToday": 6.20,
+        "lastDayReset": _NOW_ISO,
+    },
+    {
         "id": "AAPL",
         "name": "Apple Inc.",
         "symbol": "AAPL",
@@ -730,7 +744,7 @@ async def background_update_loop() -> None:
       3. Computes `change24h` as ((price - openPriceToday) / openPriceToday) * 100.
       4. Appends a new 1H candle and checks alerts.
     """
-    from backend.app.services.price_feed import fetch_coingecko_prices, fetch_aapl_price
+    from backend.app.services.price_feed import fetch_alchemy_prices, fetch_aapl_price
 
     while True:
         try:
@@ -739,12 +753,12 @@ async def background_update_loop() -> None:
             now = datetime.datetime.now(datetime.timezone.utc)
 
             try:
-                coingecko_data = await fetch_coingecko_prices()
+                alchemy_data = await fetch_alchemy_prices()
             except Exception as exc:
                 logger.warning(
-                    "coingecko_fetch_failed: error=%s — skipping tick", str(exc)
+                    "alchemy_fetch_failed: error=%s — skipping tick", str(exc)
                 )
-                coingecko_data = {}
+                alchemy_data = {}
 
             try:
                 aapl_data = await fetch_aapl_price()
@@ -764,8 +778,8 @@ async def background_update_loop() -> None:
                 last_reset_str: str = str(asset.get("lastDayReset", now.isoformat()))
                 sentiment_score: int = int(asset["sentimentScore"])
 
-                if asset_id in coingecko_data:
-                    feed = coingecko_data[asset_id]
+                if asset_id in alchemy_data:
+                    feed = alchemy_data[asset_id]
                     new_price: float = feed["price"]
                     high24h: float = feed["high24h"]
                     low24h: float = feed["low24h"]

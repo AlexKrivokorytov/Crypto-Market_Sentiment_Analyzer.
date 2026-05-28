@@ -26,6 +26,7 @@ COINGECKO_IDS: Dict[str, str] = {
     "BTC": "bitcoin",
     "ETH": "ethereum",
     "SOL": "solana",
+    "TON": "the-open-network",
 }
 
 _COINGECKO_BASE = "https://api.coingecko.com/api/v3"
@@ -246,7 +247,7 @@ def _fetch_aapl_sync() -> Dict[str, float]:
         # Flatten MultiIndex columns to single string names if necessary
         if hasattr(hist.columns, "levels"):
             hist.columns = hist.columns.get_level_values(0)
-            
+
         last_row = hist.iloc[-1]
         high24h = float(last_row.get("High", current_price))
         low24h = float(last_row.get("Low", current_price))
@@ -292,3 +293,73 @@ async def fetch_aapl_price() -> Dict[str, float]:
         "aapl_price_fetched: price=%s change24h=%s", data["price"], data["change24h"]
     )
     return data
+
+
+async def fetch_alchemy_prices() -> Dict[str, Dict[str, float]]:
+    """
+    Queries current token price data for BTC, ETH, TON, SOL from the Alchemy API.
+
+    If settings.ALCHEMY_API_KEY is not defined, or the request fails,
+    it falls back gracefully to the public CoinGecko prices endpoint.
+
+    Returns:
+        Dict keyed by asset symbol, each containing:
+            - price: float
+            - change24h: float
+            - high24h: float
+            - low24h: float
+            - volume24h: float
+    """
+    from backend.app.core.config import settings
+
+    if not settings.ALCHEMY_API_KEY:
+        return await fetch_coingecko_prices()
+
+    url = f"https://api.g.alchemy.com/prices/v1/{settings.ALCHEMY_API_KEY}/by-symbol"
+    payload = {"symbols": ["BTC", "ETH", "TON", "SOL"]}
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(url, json=payload)
+            if response.status_code == 200:
+                body = response.json()
+                result: Dict[str, Dict[str, float]] = {}
+                for item in body.get("data", []):
+                    symbol = item.get("symbol")
+                    price_str = item.get("price")
+                    if symbol and price_str:
+                        price_val = float(price_str)
+                        result[symbol] = {
+                            "price": price_val,
+                            "change24h": 0.0,
+                            "high24h": price_val,
+                            "low24h": price_val,
+                            "volume24h": 0.0,
+                        }
+
+                if result:
+                    # Enrich with 24h change, high, low, and volume statistics from CoinGecko
+                    try:
+                        cg = await fetch_coingecko_prices()
+                        for sym, metrics in cg.items():
+                            if sym not in result:
+                                result[sym] = metrics
+                            else:
+                                result[sym]["change24h"] = metrics.get("change24h", 0.0)
+                                result[sym]["high24h"] = metrics.get(
+                                    "high24h", result[sym]["price"]
+                                )
+                                result[sym]["low24h"] = metrics.get(
+                                    "low24h", result[sym]["price"]
+                                )
+                                result[sym]["volume24h"] = metrics.get("volume24h", 0.0)
+                    except Exception as cg_exc:
+                        logger.debug("coingecko_enrich_failed: %s", str(cg_exc))
+
+                    return result
+    except Exception as exc:
+        logger.warning(
+            "alchemy_prices_failed: %s - falling back to CoinGecko", str(exc)
+        )
+
+    return await fetch_coingecko_prices()

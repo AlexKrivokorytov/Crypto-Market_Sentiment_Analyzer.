@@ -2,6 +2,7 @@
 Pydantic schemas for the Market Sentiment Analyzer API.
 """
 
+import datetime
 from typing import Any, List
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
@@ -99,6 +100,54 @@ class SentimentArticle(BaseModel):
     llmReasoning: str = Field(
         ...,
         description="LLM Chain-of-thought analysis explaining the classification reasoning",
+    )
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class Tick(BaseModel):
+    """
+    Schema representing a single high-frequency tick measurement (price & sentiment).
+
+    Fields:
+        offset_seconds: Seconds elapsed relative to the bucket_start parent datetime.
+        price: Price value of the asset at this specific tick.
+        sentiment: Aggregated sentiment index score from 0 to 100.
+    """
+
+    offset_seconds: int = Field(
+        ..., description="Seconds offset relative to bucket_start parent datetime"
+    )
+    price: float = Field(..., description="Price of the asset at this tick")
+    sentiment: int = Field(
+        ..., ge=0, le=100, description="Sentiment score (0-100) at this tick"
+    )
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TickBucket(BaseModel):
+    """
+    Schema representing a bucket grouping ticks by asset and time range (Bucket Pattern).
+
+    Fields:
+        asset_id: Ticker symbol (e.g. BTC, ETH).
+        bucket_start: Datetime marking the start of the bucket.
+        bucket_end: Datetime marking the end of the bucket.
+        count: Number of ticks currently grouped in this bucket.
+        ticks: List of raw tick elements.
+    """
+
+    asset_id: str = Field(..., description="Unique ticker identifier (e.g. BTC)")
+    bucket_start: datetime.datetime = Field(
+        ..., description="Starting datetime of the bucket (e.g. hour start)"
+    )
+    bucket_end: datetime.datetime = Field(
+        ..., description="Ending datetime of the bucket (e.g. hour end)"
+    )
+    count: int = Field(0, description="Number of ticks in the bucket")
+    ticks: List[Tick] = Field(
+        default_factory=list, description="Array of raw tick elements"
     )
 
     model_config = ConfigDict(from_attributes=True)

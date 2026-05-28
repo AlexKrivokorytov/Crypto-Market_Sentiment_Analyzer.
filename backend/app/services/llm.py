@@ -2,10 +2,13 @@
 Service layer for LLM (LM Studio / Ollama) sentiment analysis integration.
 """
 
+import asyncio
 import json
 import logging
 import random
-from typing import Dict, Any, Optional
+import re
+import time
+from typing import Any, Dict, Optional, Tuple
 import httpx
 
 from backend.app.core.config import settings
@@ -111,6 +114,76 @@ def _get_mock_sentiment(title: str, summary: str) -> Dict[str, Any]:
     }
 
 
+class LLMAnalysisCache:
+    """
+    In-memory async-safe cache for LLM analysis results.
+    Prevents redundant API calls to external or local ИИ models.
+    """
+
+    def __init__(self, maxsize: int = 200, ttl_seconds: int = 3600) -> None:
+        self.maxsize = maxsize
+        self.ttl_seconds = ttl_seconds
+        self.cache: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+        self.lock = asyncio.Lock()
+
+    async def get(self, key: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieves analysis result from cache if present and not expired.
+        """
+        async with self.lock:
+            if key not in self.cache:
+                return None
+            ts, data = self.cache[key]
+            if time.time() - ts > self.ttl_seconds:
+                self.cache.pop(key, None)
+                return None
+            return data
+
+    async def set(self, key: str, value: Dict[str, Any]) -> None:
+        """
+        Stores the analysis result in cache, evicting the oldest element if maxsize exceeded.
+        """
+        async with self.lock:
+            if len(self.cache) >= self.maxsize:
+                # FIFO eviction
+                oldest = next(iter(self.cache))
+                self.cache.pop(oldest, None)
+            self.cache[key] = (time.time(), value)
+
+
+# Module-level singleton instance for the LLM cache
+llm_cache = LLMAnalysisCache()
+
+
+def clean_text(text: str) -> str:
+    """
+    Cleans raw input text to minimize prompt size and optimize token usage.
+    Removes HTML markup, URLs, extra whitespaces, and standard boilerplates.
+
+    Args:
+        text: The raw source text string.
+
+    Returns:
+        The cleaned, standardized text string.
+    """
+    # Remove HTML tags
+    text = re.sub(r"<[^>]*>", "", text)
+    # Remove absolute URLs
+    text = re.sub(r"https?://\S+|www\.\S+", "", text)
+
+    # Remove common newsletter RSS boilerplates
+    boilerplates = [
+        "click here to read more",
+        "read more on",
+        "all rights reserved",
+        "copyright",
+    ]
+    for bp in boilerplates:
+        text = re.compile(re.escape(bp), re.IGNORECASE).sub("", text)
+
+    return " ".join(text.split())
+
+
 # Global reusable HTTP client for LLM API calls with a high timeout (60.0s) for model cold starts
 _llm_client: Optional[httpx.AsyncClient] = None
 
@@ -130,10 +203,31 @@ async def analyze_article_sentiment(
 ) -> Dict[str, Any]:
     """
     Queries local LLM endpoint (Ollama / LM Studio) to evaluate article sentiment.
-    Falls back gracefully to deterministic heuristics if the API call fails.
+    Uses in-memory semantic cache and pre-cleans text inputs to protect token costs.
+
+    Args:
+        title: The headline title of the article.
+        summary: The short summary text of the article.
+        asset_symbol: The asset symbol context.
+
+    Returns:
+        A dictionary containing sentimentScore, sentimentLabel, confidence, keywords, and reasoning.
     """
+    # Clean text to minimize prompt footprint
+    cleaned_title = clean_text(title)
+    cleaned_summary = clean_text(summary)
+
+    # Check the in-memory cache first to avoid identical API requests
+    cache_key = f"{asset_symbol}:{cleaned_title}:{cleaned_summary}"
+    cached_result = await llm_cache.get(cache_key)
+    if cached_result is not None:
+        logger.info("llm_sentiment_cache_hit: asset=%s", asset_symbol)
+        return cached_result
+
     if not settings.LLM_API_URL:
-        return _get_mock_sentiment(title, summary)
+        result = _get_mock_sentiment(cleaned_title, cleaned_summary)
+        await llm_cache.set(cache_key, result)
+        return result
 
     url = f"{settings.LLM_API_URL.rstrip('/')}/chat/completions"
 
@@ -153,7 +247,10 @@ async def analyze_article_sentiment(
         "model": settings.LLM_MODEL,
         "messages": [
             {"role": "system", "content": system_instruction},
-            {"role": "user", "content": f"Title: {title}\nSummary: {summary}"},
+            {
+                "role": "user",
+                "content": f"Title: {cleaned_title}\nSummary: {cleaned_summary}",
+            },
         ],
         "temperature": 0.1,
         "response_format": {"type": "json_object"},
@@ -163,8 +260,8 @@ async def analyze_article_sentiment(
         client = get_llm_client()
         response = await client.post(url, json=payload)
         if response.status_code == 200:
-            result = response.json()
-            content = result["choices"][0]["message"]["content"].strip()
+            result_body = response.json()
+            content = result_body["choices"][0]["message"]["content"].strip()
 
             if content.startswith("```"):
                 lines = content.split("\n")
@@ -181,13 +278,16 @@ async def analyze_article_sentiment(
             keywords = list(data.get("keywords", []))
             reasoning = str(data.get("reasoning", "No explanation provided."))
 
-            return {
+            sentiment_data = {
                 "sentimentScore": score,
                 "sentimentLabel": label,
                 "confidence": confidence,
                 "keywords": keywords,
                 "reasoning": reasoning,
             }
+
+            await llm_cache.set(cache_key, sentiment_data)
+            return sentiment_data
 
         logger.warning(
             "llm_api_non_200",
@@ -199,4 +299,6 @@ async def analyze_article_sentiment(
             extra={"error": str(exc)},
         )
 
-    return _get_mock_sentiment(title, summary)
+    fallback_result = _get_mock_sentiment(cleaned_title, cleaned_summary)
+    await llm_cache.set(cache_key, fallback_result)
+    return fallback_result

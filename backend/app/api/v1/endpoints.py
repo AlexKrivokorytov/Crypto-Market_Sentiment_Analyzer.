@@ -9,6 +9,7 @@ Exposes REST routes for:
   - Portfolio: /portfolio
 """
 
+import asyncio
 import logging
 import uuid
 from typing import Any, Dict, List
@@ -209,6 +210,25 @@ async def get_config() -> Dict[str, Any]:
     return {
         "llm_configured": bool(settings.LLM_API_URL),
         "llm_model": settings.LLM_MODEL if settings.LLM_API_URL else "Simulated Model",
+    }
+
+
+@router.get(
+    "/healthz",
+    status_code=status.HTTP_200_OK,
+    summary="Bypass-DB Warmup health check for Render cold starts",
+)
+async def warmup_healthz() -> Dict[str, str]:
+    """
+    Rapid lightweight database-bypass warmup check to wake up sleeping Render containers.
+
+    Returns:
+        Static JSON payload confirming service availability.
+    """
+    return {
+        "status": "warm",
+        "service": "Market Sentiment Analyzer API",
+        "message": "FastAPI container awake and ready.",
     }
 
 
@@ -677,21 +697,53 @@ async def websocket_endpoint(websocket: WebSocket, asset_id: str) -> None:
     """
     WebSocket endpoint for real-time asset updates.
 
-    Accepts connections from clients wishing to subscribe to live updates
-    for a specific asset ticker. Keep-alive, connection, and disconnection
-    management are handled through ConnectionManager.
+    Registers a client-specific asyncio queue to isolate client bandwidth.
+    Concurrently runs a keep-alive reader loop and a queue-pull writer loop.
+
+    Args:
+        websocket: The FastAPI WebSocket object.
+        asset_id: The asset identifier channel.
     """
-    await ws_manager.connect(asset_id, websocket)
+    queue = await ws_manager.connect(asset_id, websocket)
+
+    async def write_loop() -> None:
+        """
+        Pulls messages from the socket's private queue and transmits them.
+        """
+        try:
+            while True:
+                message = await queue.get()
+                await websocket.send_json(message)
+                queue.task_done()
+        except Exception as exc:
+            logger.debug(
+                "websocket_write_loop_stopped: asset_id=%s error=%s",
+                asset_id,
+                str(exc),
+            )
+
+    # Spawn the write loop in the background
+    write_task = asyncio.create_task(write_loop())
+
+    # Keep active reader loop on the main connection thread to monitor keep-alives and disconnects
     try:
         while True:
-            # We must continuously receive messages (even if just text or keep-alive pings)
-            # to check if the client is still connected.
             data = await websocket.receive_text()
-            # If the client sends a ping or keep-alive message, reply with a pong.
             if data == "ping":
                 await websocket.send_text("pong")
     except WebSocketDisconnect:
-        await ws_manager.disconnect(asset_id, websocket)
+        pass
     except Exception as exc:
-        logger.warning("websocket_error: asset_id=%s error=%s", asset_id, str(exc))
+        logger.warning(
+            "websocket_read_loop_error: asset_id=%s error=%s",
+            asset_id,
+            str(exc),
+        )
+    finally:
+        # Clean shutdown: stop write task and drop registrations from connection manager
+        write_task.cancel()
+        try:
+            await write_task
+        except asyncio.CancelledError:
+            pass
         await ws_manager.disconnect(asset_id, websocket)

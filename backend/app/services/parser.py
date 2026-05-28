@@ -8,8 +8,9 @@ import email.utils
 import hashlib
 import logging
 import urllib.parse
+import time
 import xml.etree.ElementTree as ET
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 import httpx
 
 from backend.app.core.database import articles_collection, assets_collection
@@ -20,6 +21,7 @@ logger = logging.getLogger("app")
 ASSET_QUERIES: Dict[str, str] = {
     "BTC": "Bitcoin OR BTC",
     "ETH": "Ethereum OR ETH",
+    "TON": "Toncoin OR TON crypto",
     "SOL": "Solana OR SOL",
     "AAPL": "Apple stock OR AAPL",
 }
@@ -30,6 +32,42 @@ def _md5_hash(text: str) -> str:
     Generates a deterministic MD5 hex hash for deduplication keys.
     """
     return hashlib.md5(text.encode("utf-8")).hexdigest()
+
+
+# Memory buffer: sliding time window for article deduplication storing (timestamp, normalized_title_hash)
+_processed_articles_window: List[Tuple[float, str]] = []
+
+
+def _is_duplicate_in_window(title: str) -> bool:
+    """
+    Evaluates whether an article title is a duplicate inside a sliding 15-minute window.
+
+    Args:
+        title: The raw title headline of the article.
+
+    Returns:
+        bool: True if a match is found in the window (and thus duplicate), False otherwise.
+    """
+    global _processed_articles_window
+    now = time.time()
+    cutoff = now - 900  # 15 minutes window
+
+    # Clean old items
+    _processed_articles_window = [
+        (ts, th) for ts, th in _processed_articles_window if ts >= cutoff
+    ]
+
+    # Normalize title: lowercase alphanumeric signature
+    normalized = "".join(c for c in title.lower() if c.isalnum())
+    title_hash = hashlib.md5(normalized.encode("utf-8")).hexdigest()
+
+    for _, existing_hash in _processed_articles_window:
+        if existing_hash == title_hash:
+            return True
+
+    # Register in the sliding window
+    _processed_articles_window.append((now, title_hash))
+    return False
 
 
 # Global reusable HTTP client to leverage connection pooling and keep-alive
@@ -160,6 +198,14 @@ async def process_rss_feed_for_asset(asset_id: str) -> None:
     new_articles_count = 0
 
     for item in parsed_items[:3]:
+        # Yield control to let event loop handle websocket read/write tasks cleanly
+        await asyncio.sleep(0.5)
+
+        # Time-window sliding filter to protect against redundant database checks & LLM requests
+        if _is_duplicate_in_window(item["title"]):
+            logger.info("rss_deduplication_hit: title=%r", item["title"])
+            continue
+
         article_url = item["url"]
         article_id = f"art_{_md5_hash(article_url)}"
 
