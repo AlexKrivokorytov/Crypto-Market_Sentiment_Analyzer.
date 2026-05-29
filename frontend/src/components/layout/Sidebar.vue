@@ -90,6 +90,18 @@ function rowClass(assetId: string): string {
     : 'border-transparent text-muted-foreground hover:bg-muted/30 hover:text-foreground'
 }
 
+/** Computes inline style for active sidebar button rows using their brand color. */
+function rowStyle(assetId: RouteAssetId, isActive: boolean): Record<string, string> {
+  if (isActive) {
+    const color = getAssetBrandColor(assetId)
+    return {
+      borderColor: `${color}35`,
+      boxShadow: `0 0 12px ${color}0d`,
+    }
+  }
+  return {}
+}
+
 /** Navigates to the selected asset and closes the mobile drawer. */
 function selectAsset(assetId: string): void {
   router.push(`/asset/${assetId}`)
@@ -106,7 +118,7 @@ function handleLogout(): void {
 
 <template>
   <aside
-    class="glass-panel border-r border-border/40 h-screen transition-all duration-300 ease-in-out flex flex-col z-40
+    class="sidebar-container glass-panel border-r border-border/40 h-screen transition-all duration-300 ease-in-out flex flex-col z-40
            fixed inset-y-0 left-0 lg:relative lg:z-20"
     :class="[
       sidebarCollapsed ? 'lg:w-20' : 'lg:w-72',
@@ -125,7 +137,7 @@ function handleLogout(): void {
         <Activity class="h-5 w-5 text-gold animate-pulse" />
       </div>
       <div
-        class="flex flex-col transition-all duration-200"
+        class="flex flex-col transition-all duration-200 sidebar-hide-on-collapsed"
         :class="[sidebarCollapsed ? 'opacity-0 scale-95 pointer-events-none' : 'opacity-100 scale-100']"
       >
         <span class="font-extrabold text-sm tracking-wider uppercase text-gradient-gold font-display">
@@ -147,11 +159,11 @@ function handleLogout(): void {
         <!-- ── CRYPTO section ──────────────────────────────────────── -->
         <div class="mb-1 mt-1">
           <div
-            class="px-2 py-1.5 flex items-center gap-1.5 text-[9px] font-extrabold uppercase tracking-widest text-muted-foreground select-none"
+            class="px-2 py-1.5 flex items-center gap-1.5 text-[9px] font-extrabold uppercase tracking-widest text-muted-foreground select-none sidebar-center-on-collapsed"
             :class="[sidebarCollapsed ? 'justify-center' : '']"
           >
             <Bitcoin class="h-3 w-3 text-gold shrink-0" aria-hidden="true" />
-            <span :class="[sidebarCollapsed ? 'hidden' : '']">Crypto</span>
+            <span class="sidebar-hide-on-collapsed" :class="[sidebarCollapsed ? 'hidden' : '']">Crypto</span>
           </div>
 
           <button
@@ -160,6 +172,7 @@ function handleLogout(): void {
             @click="selectAsset(asset.id)"
             class="w-full text-left p-3 rounded-xl flex items-center border group hover-scale-premium"
             :class="rowClass(asset.id)"
+            :style="rowStyle(asset.id as RouteAssetId, selectedAssetId === asset.id)"
             :aria-label="`View ${asset.name} dashboard`"
             :aria-pressed="selectedAssetId === asset.id"
           >
@@ -173,7 +186,7 @@ function handleLogout(): void {
 
             <!-- Asset info (hidden when sidebar collapsed) -->
             <div
-              class="ml-3 flex-1 flex justify-between items-center transition-all duration-200 overflow-hidden"
+              class="ml-3 flex-1 flex justify-between items-center transition-all duration-200 overflow-hidden sidebar-hide-on-collapsed"
               :class="[sidebarCollapsed ? 'opacity-0 w-0 scale-95 pointer-events-none' : 'opacity-100 w-auto scale-100']"
             >
               <div class="flex flex-col min-w-0">
@@ -224,11 +237,11 @@ function handleLogout(): void {
         <!-- ── STOCKS section (rendered only if there are stock assets) ─ -->
         <div v-if="stockAssets.length > 0" class="mt-3">
           <div
-            class="px-2 py-1.5 flex items-center gap-1.5 text-[9px] font-extrabold uppercase tracking-widest text-muted-foreground select-none"
+            class="px-2 py-1.5 flex items-center gap-1.5 text-[9px] font-extrabold uppercase tracking-widest text-muted-foreground select-none sidebar-center-on-collapsed"
             :class="[sidebarCollapsed ? 'justify-center' : '']"
           >
             <Layers class="h-3 w-3 text-slate-400 shrink-0" aria-hidden="true" />
-            <span :class="[sidebarCollapsed ? 'hidden' : '']">Stocks</span>
+            <span class="sidebar-hide-on-collapsed" :class="[sidebarCollapsed ? 'hidden' : '']">Stocks</span>
           </div>
 
           <button
@@ -237,6 +250,7 @@ function handleLogout(): void {
             @click="selectAsset(asset.id)"
             class="w-full text-left p-3 rounded-xl flex items-center border group hover-scale-premium"
             :class="rowClass(asset.id)"
+            :style="rowStyle(asset.id as RouteAssetId, selectedAssetId === asset.id)"
             :aria-label="`View ${asset.name} dashboard`"
             :aria-pressed="selectedAssetId === asset.id"
           >
@@ -248,7 +262,7 @@ function handleLogout(): void {
             </div>
 
             <div
-              class="ml-3 flex-1 flex justify-between items-center transition-all duration-200 overflow-hidden"
+              class="ml-3 flex-1 flex justify-between items-center transition-all duration-200 overflow-hidden sidebar-hide-on-collapsed"
               :class="[sidebarCollapsed ? 'opacity-0 w-0 scale-95 pointer-events-none' : 'opacity-100 w-auto scale-100']"
             >
               <div class="flex flex-col min-w-0">
@@ -321,7 +335,7 @@ function handleLogout(): void {
           </svg>
         </div>
         <span
-          class="font-semibold text-sm transition-all duration-200"
+          class="font-semibold text-sm transition-all duration-200 sidebar-hide-on-collapsed"
           :class="[sidebarCollapsed ? 'opacity-0 w-0 scale-95 pointer-events-none' : 'opacity-100 scale-100']"
         >
           Portfolio
@@ -351,7 +365,7 @@ function handleLogout(): void {
         </div>
 
         <div
-          class="flex flex-col min-w-0 transition-all duration-200"
+          class="flex flex-col min-w-0 transition-all duration-200 sidebar-hide-on-collapsed"
           :class="[sidebarCollapsed ? 'opacity-0 w-0 scale-95 pointer-events-none' : 'opacity-100 w-auto scale-100']"
         >
           <span class="text-xs font-semibold text-foreground truncate">
@@ -395,7 +409,7 @@ function handleLogout(): void {
       </div>
 
       <!-- Auth: Sign in / Sign out -->
-      <div :class="[sidebarCollapsed ? 'hidden' : 'block']">
+      <div class="sidebar-hide-on-collapsed" :class="[sidebarCollapsed ? 'hidden' : 'block']">
         <button
           v-if="authStore.isAuthenticated"
           id="sidebar-logout-btn"
@@ -424,3 +438,19 @@ function handleLogout(): void {
     </div>
   </aside>
 </template>
+
+<style scoped>
+.sidebar-container {
+  container-type: inline-size;
+  container-name: sidebar;
+}
+
+@container sidebar (max-width: 240px) {
+  .sidebar-hide-on-collapsed {
+    display: none !important;
+  }
+  .sidebar-center-on-collapsed {
+    justify-content: center !important;
+  }
+}
+</style>

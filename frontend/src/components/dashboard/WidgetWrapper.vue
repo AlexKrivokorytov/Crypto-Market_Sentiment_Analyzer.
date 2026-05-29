@@ -90,8 +90,9 @@ function handleCollapseToggle() {
         
         <!-- Live Glowing Status Dot -->
         <span 
-          class="h-1.5 w-1.5 rounded-full shrink-0" 
-          :class="[hasError ? 'bg-rose-500 shadow-rose-500/50' : 'bg-indigo-500 shadow-indigo-500/50 animate-pulse']"
+          class="h-1.5 w-1.5 rounded-full shrink-0 transition-all duration-500" 
+          :class="[hasError ? 'bg-rose-500 shadow-rose-500/50' : 'animate-pulse']"
+          :style="!hasError ? { backgroundColor: 'var(--active-brand-color)', boxShadow: '0 0 8px var(--active-brand-color)' } : {}"
         ></span>
 
         <h3 class="text-xs sm:text-sm font-bold tracking-tight text-slate-200 truncate">
@@ -139,9 +140,9 @@ function handleCollapseToggle() {
             <AlertTriangle class="h-6 w-6" />
           </div>
 
-          <h4 class="text-sm font-bold text-slate-100">Виджет временно недоступен</h4>
+          <h4 class="text-sm font-bold text-slate-100">Widget Temporarily Offline</h4>
           <p class="text-xs text-slate-400 mt-1 max-w-sm leading-relaxed">
-            В компоненте произошел критический сбой отрисовки или загрузки данных.
+            A critical rendering error occurred inside this component block.
           </p>
 
           <!-- Raw Debug Details -->
@@ -156,7 +157,7 @@ function handleCollapseToggle() {
             class="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white shadow-md shadow-rose-900/30 transition-all active:scale-95 cursor-pointer"
           >
             <RefreshCw class="h-3.5 w-3.5" />
-            <span>Перезагрузить виджет</span>
+            <span>Reinitialize Widget</span>
           </button>
         </div>
       </Transition>

@@ -10,6 +10,7 @@ import time
 from typing import Any, Dict, Optional, Tuple
 import httpx
 
+from backend.app.core.circuit_breaker import CircuitBreaker
 from backend.app.services.sentiment_engine import analyze_sentiment_local
 
 logger = logging.getLogger("app")
@@ -133,7 +134,7 @@ class LLMAnalysisCache:
             if key not in self.cache:
                 return None
             ts, data = self.cache[key]
-            if time.time() - ts > self.ttl_seconds:
+            if time.time() - ts >= self.ttl_seconds:
                 self.cache.pop(key, None)
                 return None
             return data
@@ -152,6 +153,22 @@ class LLMAnalysisCache:
 
 # Module-level singleton instance for the LLM cache
 llm_cache = LLMAnalysisCache()
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Circuit Breaker for the sentiment analysis path
+#
+# Primary:  analyze_sentiment_local() — deterministic local VADER engine
+# Fallback: _get_mock_sentiment()     — heuristic keyword template matcher
+#
+# State transitions are logged at WARNING level for observability.
+# failure_threshold=3 means 3 consecutive VADER errors trip the breaker.
+# recovery_timeout=60s means the breaker probes again after 1 minute.
+# ──────────────────────────────────────────────────────────────────────────────
+_sentiment_breaker = CircuitBreaker(
+    name="sentiment_engine",
+    failure_threshold=3,
+    recovery_timeout=60.0,
+)
 
 
 def clean_text(text: str) -> str:
@@ -207,30 +224,53 @@ async def analyze_article_sentiment(
     title: str, summary: str, asset_symbol: str
 ) -> Dict[str, Any]:
     """
-    Evaluates article sentiment using a self-contained local VADER-like engine.
-    Uses in-memory semantic cache and pre-cleans text inputs to protect token costs.
+    Evaluates article sentiment with Circuit Breaker protection.
+
+    The Circuit Breaker wraps the local VADER engine (primary path) with
+    a template-based mock fallback. On 3 consecutive VADER failures the
+    breaker trips to OPEN and routes all calls to the fallback until
+    a 60-second recovery probe succeeds.
+
+    Results are cached in-memory (TTL 1h) so cache hits bypass the
+    circuit breaker entirely — no state changes from cached responses.
 
     Args:
-        title: The headline title of the article.
-        summary: The short summary text of the article.
-        asset_symbol: The asset symbol context.
+        title:        The headline title of the article.
+        summary:      The short summary text of the article.
+        asset_symbol: The asset ticker symbol for cache keying and logging.
 
     Returns:
-        A dictionary containing sentimentScore, sentimentLabel, confidence, keywords, and reasoning.
+        Dict containing sentimentScore, sentimentLabel, confidence,
+        keywords, and reasoning.
     """
-    # Clean text to minimize prompt footprint
+    # Pre-clean text to minimise prompt footprint and normalise cache keys
     cleaned_title = clean_text(title)
     cleaned_summary = clean_text(summary)
 
-    # Check the in-memory cache first to avoid identical requests
+    # Cache hit → bypass breaker entirely (no state change from cached data)
     cache_key = f"{asset_symbol}:{cleaned_title}:{cleaned_summary}"
     cached_result = await llm_cache.get(cache_key)
     if cached_result is not None:
         logger.info("sentiment_local_cache_hit: asset=%s", asset_symbol)
         return cached_result
 
-    # Evaluates the news sentiment instantly via the deterministic rules-based analyzer
-    result = analyze_sentiment_local(cleaned_title, cleaned_summary)
+    async def _primary() -> Dict[str, Any]:
+        """Calls the local VADER engine synchronously (CPU-bound, no I/O)."""
+        return analyze_sentiment_local(cleaned_title, cleaned_summary)
+
+    async def _fallback() -> Dict[str, Any]:
+        """Template-based heuristic fallback when VADER is unavailable."""
+        logger.warning(
+            "sentiment_fallback_used: asset=%s breaker_state=%s",
+            asset_symbol,
+            _sentiment_breaker.state.name,
+        )
+        return _get_mock_sentiment(cleaned_title, cleaned_summary)
+
+    result = await _sentiment_breaker.call(
+        primary=_primary,
+        fallback=_fallback,
+    )
 
     await llm_cache.set(cache_key, result)
     return result

@@ -1,19 +1,84 @@
+# ==============================================================================
+# Crypto-Market Sentiment Analyzer — Docker Compose (local development)
+#
+# Architecture
+# ─────────────────────────────────────────────────────────────────────────────
+#  ┌─────────────┐   app_network    ┌──────────────┐   db_network   ┌──────────┐
+#  │  frontend   │ ──────────────── │   backend    │ ─────────────── │ mongodb  │
+#  │  (Nginx/80) │                  │ (uvicorn/8000)│                │ (27017)  │
+#  └─────────────┘                  └──────────────┘                └──────────┘
+#
+# Network isolation
+#   db_network  — internal:true. MongoDB is NOT reachable from the host or frontend.
+#   app_network — bridges frontend ↔ backend only.
+#
+# MongoDB authentication
+#   The local MongoDB container runs with MONGO_INITDB_ROOT_* credentials.
+#   The backend connects via an authenticated MONGODB_URL that includes
+#   username, password and authSource=admin.
+#
+# Production (Render + MongoDB Atlas)
+#   Override MONGODB_URL with your Atlas SRV connection string via Render env vars.
+#   The MONGO_INITDB_ROOT_* vars are irrelevant in that context.
+#
+# Usage
+#   cp backend/.env.example backend/.env   # fill in real secrets
+#   docker compose up --build -d
+# ==============================================================================
+
 services:
+
+  # ── MongoDB (local dev only — production uses Atlas) ───────────────────────
   mongodb:
     image: mongo:6.0
     container_name: sentiment_mongodb
+    # Port exposed on loopback only — not reachable from other Docker networks
     ports:
-      - "27017:27017"
+      - "127.0.0.1:27017:27017"
+    environment:
+      # Credentials for the local container's root user.
+      # Must match MONGODB_URL in backend/.env (authSource=admin).
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-sentiment_admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-changeme_dev_only}
+      MONGO_INITDB_DATABASE: sentiment_db
     volumes:
       - mongo_data:/data/db
-    restart: unless-stopped
+    networks:
+      - db_network
+    restart: on-failure:5
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      # mongosh available in mongo:6.0; -u/-p required when auth is enabled
+      test:
+        - "CMD"
+        - "mongosh"
+        - "--quiet"
+        - "--username"
+        - "${MONGO_ROOT_USERNAME:-sentiment_admin}"
+        - "--password"
+        - "${MONGO_ROOT_PASSWORD:-changeme_dev_only}"
+        - "--authenticationDatabase"
+        - "admin"
+        - "--eval"
+        - "db.adminCommand('ping').ok"
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 20s
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
+  # ── FastAPI backend ─────────────────────────────────────────────────────────
   backend:
     build:
       context: .
@@ -24,22 +89,46 @@ services:
     env_file:
       - ./backend/.env
     environment:
-      - MONGODB_URL=mongodb://mongodb:27017
+      # Override MONGODB_URL to point at the containerised MongoDB with auth.
+      # Uses Docker service-name 'mongodb' for DNS resolution within db_network.
+      # For production on Render, set MONGODB_URL to your Atlas SRV string instead.
+      MONGODB_URL: "mongodb://${MONGO_ROOT_USERNAME:-sentiment_admin}:${MONGO_ROOT_PASSWORD:-changeme_dev_only}@mongodb:27017/sentiment_db?authSource=admin"
+      # Allow host Ollama (via extra_hosts) for LLM integration on dev machines
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    restart: unless-stopped
+    networks:
+      - app_network
+      - db_network
+    restart: on-failure:5
     depends_on:
       mongodb:
         condition: service_healthy
-    # Uses the DB-bypass /api/v1/healthz warmup route so Render health pings
-    # succeed instantly without triggering a MongoDB round-trip.
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; r=urllib.request.urlopen('http://localhost:8000/api/v1/healthz',timeout=8); sys.exit(0 if r.status==200 else 1)\""]
+      test:
+        - "CMD-SHELL"
+        - >
+          python -c "import urllib.request,sys;
+          r=urllib.request.urlopen('http://localhost:8000/api/v1/healthz',timeout=8);
+          sys.exit(0 if r.status==200 else 1)"
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 45s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 768M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
+  # ── Vue 3 frontend (Nginx) ──────────────────────────────────────────────────
   frontend:
     build:
       context: ./frontend
@@ -47,10 +136,41 @@ services:
     container_name: sentiment_frontend
     ports:
       - "8080:80"
-    restart: unless-stopped
+    networks:
+      - app_network
+    # Frontend deliberately NOT on db_network — cannot reach MongoDB at all
+    restart: on-failure:5
     depends_on:
       backend:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+        reservations:
+          cpus: "0.05"
+          memory: 32M
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
 
+# ── Networks ────────────────────────────────────────────────────────────────
+networks:
+  # Public-facing bridge — frontend ↔ backend
+  app_network:
+    driver: bridge
+
+  # Isolated backend bridge — backend ↔ mongodb only
+  # internal: true means no external routing is possible for this network
+  db_network:
+    driver: bridge
+    internal: true
+
+# ── Volumes ──────────────────────────────────────────────────────────────────
 volumes:
+  # Named volume keeps MongoDB data across container restarts
   mongo_data:
+    driver: local

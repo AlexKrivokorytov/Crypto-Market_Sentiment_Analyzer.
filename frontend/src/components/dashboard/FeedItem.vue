@@ -133,7 +133,7 @@ const formatDate = (isoString: string) => {
           class="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider text-indigo-400 hover:text-indigo-300 disabled:text-indigo-400/50 disabled:cursor-not-allowed transition-colors"
         >
           <component :is="isAiRequestPending ? Loader2 : Sparkles" class="h-3.5 w-3.5" :class="[isAiRequestPending ? 'animate-spin' : '']" />
-          {{ isAiRequestPending ? 'Analysing...' : 'Запросить ИИ-анализ' }}
+          {{ isAiRequestPending ? 'Analyzing...' : 'Request Live AI Sentiment' }}
         </button>
       </div>
       

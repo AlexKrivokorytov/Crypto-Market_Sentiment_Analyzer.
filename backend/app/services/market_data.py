@@ -1,13 +1,21 @@
 """
-Service layer for managing market data, price seeding, historical candle persistence,
-and database queries.
+Thin orchestrator for market data operations.
 
-Phase 1 + 2 changes:
-  - change24h computed as ((price - openPriceToday) / openPriceToday) * 100.
-  - Historical candles are seeded once into MongoDB via real OHLCV APIs (with random fallback).
-  - A 60-second candle appender writes live candle data to the 1H collection.
-  - Daily openPriceToday resets managed per asset at tick time.
-  - Real price sync from CoinGecko (BTC/ETH/SOL) and yfinance (AAPL) every 60 seconds.
+This module is the sole entry point for:
+  - Database seeding at startup (seed_database_if_empty)
+  - Live price sync background loop (background_update_loop)
+  - Historical candle seeding and reading
+  - Live 1H candle appender
+  - Alert checking
+
+All per-asset data fetching is delegated to the AssetHandlerFactory.
+Adding a new coin requires only a one-line change in handlers/config.py.
+
+Phase 1 refactor:
+  - DEFAULT_ASSETS and per-asset constant blocks removed.
+  - seed_database_if_empty iterates handler_factory.all().
+  - background_update_loop iterates handler_factory.all() → handler.fetch_price().
+  - seed_historical_candles calls handler.fetch_ohlcv() via the factory.
 """
 
 import asyncio
@@ -21,117 +29,16 @@ from backend.app.core.database import (
     articles_collection,
     historical_collection,
 )
+from backend.app.handlers.factory import handler_factory
 from backend.app.schemas.market import HistoricalDataPoint
 from backend.app.services.websocket_manager import manager as ws_manager
 
 logger = logging.getLogger("app")
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Default seed data
-# ──────────────────────────────────────────────────────────────────────────────
 
-_NOW_ISO = datetime.datetime.now(datetime.timezone.utc).isoformat()
-
-DEFAULT_ASSETS: List[Dict[str, Any]] = [
-    {
-        "id": "BTC",
-        "name": "Bitcoin",
-        "symbol": "BTC",
-        "price": 68420.50,
-        "change24h": 0.0,
-        "high24h": 69150.00,
-        "low24h": 66800.00,
-        "volume24h": 28450120000,
-        "sentimentScore": 74,
-        "sentimentLabel": "Bullish",
-        "openPriceToday": 68420.50,
-        "lastDayReset": _NOW_ISO,
-    },
-    {
-        "id": "ETH",
-        "name": "Ethereum",
-        "symbol": "ETH",
-        "price": 3482.10,
-        "change24h": 0.0,
-        "high24h": 3590.00,
-        "low24h": 3420.00,
-        "volume24h": 14210980000,
-        "sentimentScore": 48,
-        "sentimentLabel": "Neutral",
-        "openPriceToday": 3482.10,
-        "lastDayReset": _NOW_ISO,
-    },
-    {
-        "id": "SOL",
-        "name": "Solana",
-        "symbol": "SOL",
-        "price": 154.85,
-        "change24h": 0.0,
-        "high24h": 156.40,
-        "low24h": 140.20,
-        "volume24h": 4120550000,
-        "sentimentScore": 86,
-        "sentimentLabel": "Bullish",
-        "openPriceToday": 154.85,
-        "lastDayReset": _NOW_ISO,
-    },
-    {
-        "id": "TON",
-        "name": "Toncoin",
-        "symbol": "TON",
-        "price": 6.20,
-        "change24h": 0.0,
-        "high24h": 6.50,
-        "low24h": 6.00,
-        "volume24h": 350000000,
-        "sentimentScore": 62,
-        "sentimentLabel": "Bullish",
-        "openPriceToday": 6.20,
-        "lastDayReset": _NOW_ISO,
-    },
-    {
-        "id": "XRP",
-        "name": "Ripple",
-        "symbol": "XRP",
-        "price": 0.52,
-        "change24h": 0.0,
-        "high24h": 0.55,
-        "low24h": 0.49,
-        "volume24h": 980000000,
-        "sentimentScore": 50,
-        "sentimentLabel": "Neutral",
-        "openPriceToday": 0.52,
-        "lastDayReset": _NOW_ISO,
-    },
-    {
-        "id": "ADA",
-        "name": "Cardano",
-        "symbol": "ADA",
-        "price": 0.45,
-        "change24h": 0.0,
-        "high24h": 0.48,
-        "low24h": 0.42,
-        "volume24h": 380000000,
-        "sentimentScore": 50,
-        "sentimentLabel": "Neutral",
-        "openPriceToday": 0.45,
-        "lastDayReset": _NOW_ISO,
-    },
-    {
-        "id": "AAPL",
-        "name": "Apple Inc.",
-        "symbol": "AAPL",
-        "price": 185.35,
-        "change24h": 0.0,
-        "high24h": 186.95,
-        "low24h": 184.10,
-        "volume24h": 8930400000,
-        "sentimentScore": 54,
-        "sentimentLabel": "Neutral",
-        "openPriceToday": 185.35,
-        "lastDayReset": _NOW_ISO,
-    },
-]
+# ──────────────────────────────────────────────────────────────────────────────
+# Article generation helpers
+# ──────────────────────────────────────────────────────────────────────────────
 
 ARTICLE_TEMPLATES: Dict[str, List[Dict[str, Any]]] = {
     "bullish": [
@@ -182,21 +89,16 @@ SOURCES: List[str] = [
 ]
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Article generation helpers
-# ──────────────────────────────────────────────────────────────────────────────
-
-
 def generate_single_mock_article(
     asset_id: str, asset_name: str, timestamp: datetime.datetime
 ) -> Dict[str, Any]:
     """
-    Generates a single randomized mock sentiment article for seeding the database.
+    Generates a single randomised mock sentiment article for seeding the database.
 
     Args:
-        asset_id: Ticker symbol of the asset.
+        asset_id:   Ticker symbol of the asset.
         asset_name: Full display name of the asset.
-        timestamp: UTC datetime to stamp the article with.
+        timestamp:  UTC datetime to stamp the article with.
 
     Returns:
         A dict representing a complete article document ready for insertion.
@@ -237,7 +139,7 @@ def generate_single_mock_article(
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Database seeding
+# Database seeding — now fully driven by AssetHandlerFactory
 # ──────────────────────────────────────────────────────────────────────────────
 
 
@@ -245,10 +147,13 @@ async def seed_database_if_empty() -> None:
     """
     Checks MongoDB collection states and seeds defaults if empty.
 
+    Asset seed documents come from handler.to_seed_document() so that
+    seed data is always in sync with HANDLER_CONFIG — no duplication.
+
     Seeds:
-      - DEFAULT_ASSETS into `assets_collection` when empty.
+      - Assets into `assets_collection` when empty (factory-driven).
       - Mock articles into `articles_collection` when empty.
-      - Historical candles for all assets and timeframes when empty.
+      - Historical candles for all assets × timeframes when empty.
 
     Raises:
         Exception: Propagates any MongoDB error after logging it.
@@ -256,9 +161,14 @@ async def seed_database_if_empty() -> None:
     try:
         asset_count = await assets_collection.count_documents({})
         if asset_count == 0:
-            logger.info("Assets collection empty — seeding defaults.")
-            await assets_collection.insert_many(DEFAULT_ASSETS)
-            logger.info("Assets seeded successfully.")
+            logger.info("Assets collection empty — seeding from handler factory.")
+            seed_docs = [h.to_seed_document() for h in handler_factory.all()]
+            await assets_collection.insert_many(seed_docs)
+            logger.info(
+                "db_seed_assets_done: count=%d assets=%s",
+                len(seed_docs),
+                [h.asset_id for h in handler_factory.all()],
+            )
 
         art_count = await articles_collection.count_documents({})
         if art_count == 0:
@@ -266,24 +176,21 @@ async def seed_database_if_empty() -> None:
             now = datetime.datetime.now(datetime.timezone.utc)
             seed_articles: List[Dict[str, Any]] = []
 
-            for asset in DEFAULT_ASSETS:
-                asset_id = str(asset["id"])
-                asset_name = str(asset["name"])
+            for handler in handler_factory.all():
                 for i in range(10):
                     ts = now - datetime.timedelta(minutes=i * 45)
                     seed_articles.append(
-                        generate_single_mock_article(asset_id, asset_name, ts)
+                        generate_single_mock_article(handler.asset_id, handler.name, ts)
                     )
 
             if seed_articles:
                 await articles_collection.insert_many(seed_articles)
-                logger.info("Seeded %d articles.", len(seed_articles))
+                logger.info("db_seed_articles_done: count=%d", len(seed_articles))
 
-        # Seed historical candles for every asset x timeframe combination
-        for asset in DEFAULT_ASSETS:
-            asset_id = str(asset["id"])
+        # Seed historical candles for every asset × timeframe
+        for handler in handler_factory.all():
             for timeframe in ("1H", "24H", "7D", "30D"):
-                await seed_historical_candles(asset_id, timeframe)
+                await seed_historical_candles(handler.asset_id, timeframe)
 
     except Exception as exc:
         logger.error("db_seed_failed: %s", str(exc))
@@ -293,37 +200,6 @@ async def seed_database_if_empty() -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 # Historical candle helpers
 # ──────────────────────────────────────────────────────────────────────────────
-
-
-def _build_candle_volatility(asset_id: str, timeframe: str) -> float:
-    """
-    Returns the per-candle volatility factor for a given asset and timeframe.
-
-    Args:
-        asset_id: Ticker symbol.
-        timeframe: One of '1H', '24H', '7D', '30D'.
-
-    Returns:
-        Float volatility multiplier for candle generation.
-    """
-    base: float = (
-        0.015
-        if asset_id == "SOL"
-        else 0.005
-        if asset_id == "BTC"
-        else 0.008
-        if asset_id == "ETH"
-        else 0.003
-    )
-    return (
-        base * 0.1
-        if timeframe == "1H"
-        else base
-        if timeframe == "24H"
-        else base * 2.5
-        if timeframe == "7D"
-        else base * 6.0
-    )
 
 
 def _timeframe_to_step_minutes(timeframe: str) -> int:
@@ -367,7 +243,7 @@ def _format_candle_timestamp(ts: datetime.datetime, timeframe: str) -> str:
     Formats a UTC datetime into the display string expected by frontend charts.
 
     Args:
-        ts: UTC datetime of the candle.
+        ts:        UTC datetime of the candle.
         timeframe: One of '1H', '24H', '7D', '30D'.
 
     Returns:
@@ -391,14 +267,13 @@ async def seed_historical_candles(asset_id: str, timeframe: str) -> None:
     """
     Generates and bulk-inserts the initial candle history for an asset+timeframe pair.
 
-    For BTC, ETH, SOL: attempts to fetch real OHLCV from CoinGecko. Falls back to
-    random generation if the API is unavailable at seed time.
-    For AAPL: uses yfinance historical data. Falls back to random generation.
+    Delegates OHLCV fetching to the registered BaseAssetHandler.
+    Falls back to random candle generation if the handler returns no data.
 
     Skips insertion if at least one candle already exists (idempotent).
 
     Args:
-        asset_id: Ticker symbol (e.g. 'BTC').
+        asset_id:  Ticker symbol (e.g. 'BTC').
         timeframe: One of '1H', '24H', '7D', '30D'.
 
     Raises:
@@ -413,11 +288,61 @@ async def seed_historical_candles(asset_id: str, timeframe: str) -> None:
     asset = await assets_collection.find_one({"id": asset_id})
     if not asset:
         logger.warning(
-            "seed_historical_candles_skip: asset not found asset_id=%s", asset_id
+            "seed_historical_candles_skip: asset_id=%s not found in DB", asset_id
         )
         return
 
-    candles = await _seed_from_real_ohlcv(asset_id, timeframe, asset)
+    # Attempt real OHLCV via the handler
+    candles: List[Dict[str, Any]] = []
+    try:
+        handler = handler_factory.get(asset_id)
+        days_map: Dict[str, int] = {"1H": 1, "24H": 1, "7D": 7, "30D": 30}
+        days = days_map.get(timeframe, 1)
+        ohlcv_rows = await handler.fetch_ohlcv(days)
+
+        if ohlcv_rows:
+            points_count = _timeframe_to_points_count(timeframe)
+            sentiment_score: int = int(asset.get("sentimentScore", 50))
+            volume24h: int = int(asset.get("volume24h", 1_000_000))
+
+            for row in ohlcv_rows[-points_count:]:
+                ts_unix = row.timestamp_ms // 1000
+                ts_dt = datetime.datetime.fromtimestamp(
+                    ts_unix, tz=datetime.timezone.utc
+                )
+                ts_str = _format_candle_timestamp(ts_dt, timeframe)
+                candle_sentiment = min(
+                    100,
+                    max(0, int(sentiment_score + (random.random() - 0.5) * 20)),
+                )
+                vol = int(
+                    row.volume
+                    if row.volume > 0
+                    else volume24h / max(len(ohlcv_rows), 1) * (0.5 + random.random())
+                )
+                candles.append(
+                    {
+                        "asset_id": asset_id,
+                        "timeframe": timeframe,
+                        "timestamp": ts_str,
+                        "timestamp_unix": ts_unix,
+                        "open": round(row.open, 2),
+                        "high": round(row.high, 2),
+                        "low": round(row.low, 2),
+                        "close": round(row.close, 2),
+                        "volume": vol,
+                        "sentimentScore": candle_sentiment,
+                    }
+                )
+    except (KeyError, Exception) as exc:
+        logger.warning(
+            "seed_historical_candles_handler_failed: asset_id=%s timeframe=%s error=%s "
+            "— using random fallback",
+            asset_id,
+            timeframe,
+            str(exc),
+        )
+
     if not candles:
         candles = _generate_random_candles(asset_id, timeframe, asset)
 
@@ -432,178 +357,11 @@ async def seed_historical_candles(asset_id: str, timeframe: str) -> None:
             )
         except Exception as exc:
             logger.error(
-                "seed_historical_candles_failed: asset_id=%s timeframe=%s error=%s",
+                "seed_historical_candles_insert_failed: asset_id=%s timeframe=%s error=%s",
                 asset_id,
                 timeframe,
                 str(exc),
             )
-
-
-async def _seed_from_real_ohlcv(
-    asset_id: str,
-    timeframe: str,
-    asset: Dict[str, Any],
-) -> List[Dict[str, Any]]:
-    """
-    Attempts to build candle documents from real OHLCV API data.
-
-    Returns an empty list if the API is unavailable or the asset is not supported.
-
-    Args:
-        asset_id: Ticker symbol.
-        timeframe: Candle timeframe ('1H', '24H', '7D', '30D').
-        asset: MongoDB asset document with current price/volume.
-
-    Returns:
-        List of candle dicts ready for MongoDB insertion, or empty list on failure.
-    """
-    from backend.app.services.price_feed import (
-        fetch_coingecko_ohlcv,
-        COINGECKO_IDS,
-    )
-
-    days_map: Dict[str, int] = {"1H": 1, "24H": 1, "7D": 7, "30D": 30}
-    days = days_map.get(timeframe, 1)
-
-    try:
-        if asset_id in COINGECKO_IDS:
-            raw = await fetch_coingecko_ohlcv(asset_id, days)
-            return _coingecko_ohlcv_to_candles(asset_id, timeframe, raw, asset)
-
-        if asset_id == "AAPL":
-            return await _aapl_ohlcv_to_candles(asset_id, timeframe, days, asset)
-
-    except Exception as exc:
-        logger.warning(
-            "real_ohlcv_seed_failed: asset_id=%s timeframe=%s error=%s — using random fallback",
-            asset_id,
-            timeframe,
-            str(exc),
-        )
-
-    return []
-
-
-def _coingecko_ohlcv_to_candles(
-    asset_id: str,
-    timeframe: str,
-    raw: List[List[float]],
-    asset: Dict[str, Any],
-) -> List[Dict[str, Any]]:
-    """
-    Converts CoinGecko OHLCV rows to the internal MongoDB candle document format.
-
-    Args:
-        asset_id: Ticker symbol.
-        timeframe: Candle timeframe.
-        raw: List of [timestamp_ms, open, high, low, close] from CoinGecko.
-        asset: MongoDB asset document.
-
-    Returns:
-        List of candle dicts.
-    """
-    sentiment_score: int = int(asset.get("sentimentScore", 50))
-    volume24h: int = int(asset.get("volume24h", 1000000))
-    points_count = _timeframe_to_points_count(timeframe)
-    candles: List[Dict[str, Any]] = []
-
-    for row in raw[-points_count:]:
-        if len(row) < 5:
-            continue
-        ts_ms = int(row[0])
-        ts_unix = ts_ms // 1000
-        ts_dt = datetime.datetime.fromtimestamp(ts_unix, tz=datetime.timezone.utc)
-        ts_str = _format_candle_timestamp(ts_dt, timeframe)
-        candle_sentiment = min(
-            100, max(0, int(sentiment_score + (random.random() - 0.5) * 20))
-        )
-        candles.append(
-            {
-                "asset_id": asset_id,
-                "timeframe": timeframe,
-                "timestamp": ts_str,
-                "timestamp_unix": ts_unix,
-                "open": round(float(row[1]), 2),
-                "high": round(float(row[2]), 2),
-                "low": round(float(row[3]), 2),
-                "close": round(float(row[4]), 2),
-                "volume": int(volume24h / max(len(raw), 1) * (0.5 + random.random())),
-                "sentimentScore": candle_sentiment,
-            }
-        )
-
-    return candles
-
-
-async def _aapl_ohlcv_to_candles(
-    asset_id: str,
-    timeframe: str,
-    days: int,
-    asset: Dict[str, Any],
-) -> List[Dict[str, Any]]:
-    """
-    Fetches AAPL historical OHLCV from yfinance and converts to candle format.
-
-    Args:
-        asset_id: Should always be 'AAPL'.
-        timeframe: Candle timeframe.
-        days: Number of calendar days of history to request.
-        asset: MongoDB asset document.
-
-    Returns:
-        List of candle dicts.
-    """
-    import yfinance as yf  # type: ignore[import-untyped]
-
-    loop = asyncio.get_event_loop()
-    interval = "1h" if timeframe in ("1H", "24H") else "1d"
-    period = f"{days}d" if days <= 60 else "60d"
-
-    def _download() -> Any:
-        return yf.download(
-            "AAPL",
-            period=period,
-            interval=interval,
-            progress=False,
-            auto_adjust=True,
-        )
-
-    hist = await loop.run_in_executor(None, _download)
-    if hist is None or hist.empty:
-        return []
-
-    # Flatten MultiIndex columns to single string names if necessary
-    if hasattr(hist.columns, "levels"):
-        hist.columns = hist.columns.get_level_values(0)
-
-    sentiment_score: int = int(asset.get("sentimentScore", 50))
-    volume24h: int = int(asset.get("volume24h", 1000000))
-    points_count = _timeframe_to_points_count(timeframe)
-    candles: List[Dict[str, Any]] = []
-
-    for dt_idx, row in hist.tail(points_count).iterrows():
-        ts_dt = dt_idx.to_pydatetime().replace(tzinfo=datetime.timezone.utc)
-        ts_unix = int(ts_dt.timestamp())
-        ts_str = _format_candle_timestamp(ts_dt, timeframe)
-        candle_sentiment = min(
-            100, max(0, int(sentiment_score + (random.random() - 0.5) * 20))
-        )
-        candles.append(
-            {
-                "asset_id": asset_id,
-                "timeframe": timeframe,
-                "timestamp": ts_str,
-                "timestamp_unix": ts_unix,
-                "open": round(float(row["Open"]), 2),
-                "high": round(float(row["High"]), 2),
-                "low": round(float(row["Low"]), 2),
-                "close": round(float(row["Close"]), 2),
-                "volume": int(row.get("Volume", volume24h // points_count)),
-                "sentimentScore": candle_sentiment,
-            }
-        )
-
-    return candles
 
 
 def _generate_random_candles(
@@ -614,17 +372,33 @@ def _generate_random_candles(
     """
     Fallback random candle generator used when real OHLCV APIs are unavailable.
 
+    Derives per-candle volatility from the registered handler's volatility attribute,
+    falling back to a conservative 0.005 if the handler is not found.
+
     Args:
-        asset_id: Ticker symbol.
+        asset_id:  Ticker symbol.
         timeframe: Candle timeframe.
-        asset: MongoDB asset document with current price/volume/sentiment.
+        asset:     MongoDB asset document with current price/volume/sentiment.
 
     Returns:
         List of candle dicts.
     """
+    try:
+        handler = handler_factory.get(asset_id)
+        base_vol = handler.volatility
+    except KeyError:
+        base_vol = 0.005
+
+    timeframe_multipliers: Dict[str, float] = {
+        "1H": 0.1,
+        "24H": 1.0,
+        "7D": 2.5,
+        "30D": 6.0,
+    }
+    vol_factor = base_vol * timeframe_multipliers.get(timeframe, 1.0)
+
     points_count = _timeframe_to_points_count(timeframe)
     step_minutes = _timeframe_to_step_minutes(timeframe)
-    vol_factor = _build_candle_volatility(asset_id, timeframe)
     base_price: float = float(asset["price"])
     volume24h: int = int(asset["volume24h"])
     sentiment_score: int = int(asset["sentimentScore"])
@@ -687,7 +461,7 @@ async def get_historical_candles(
     Returns candles sorted by `timestamp_unix` ascending (oldest to newest).
 
     Args:
-        asset_id: Ticker symbol (e.g. 'BTC').
+        asset_id:  Ticker symbol (e.g. 'BTC').
         timeframe: One of '1H', '24H', '7D', '30D'.
 
     Returns:
@@ -758,135 +532,6 @@ async def append_latest_candle(asset_id: str) -> None:
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Background price update loop (Phase 2 — real data)
-# ──────────────────────────────────────────────────────────────────────────────
-
-
-async def background_update_loop() -> None:
-    """
-    Syncs real market prices from CoinGecko (BTC/ETH/SOL) and yfinance (AAPL) every 60 seconds.
-
-    On each tick:
-      1. Checks if the UTC date has rolled over; resets `openPriceToday` if so.
-      2. Fetches current prices from external APIs (cached at 60s TTL).
-      3. Computes `change24h` as ((price - openPriceToday) / openPriceToday) * 100.
-      4. Appends a new 1H candle and checks alerts.
-    """
-    from backend.app.services.price_feed import fetch_alchemy_prices, fetch_aapl_price
-
-    while True:
-        try:
-            await asyncio.sleep(60.0)
-
-            now = datetime.datetime.now(datetime.timezone.utc)
-
-            try:
-                alchemy_data = await fetch_alchemy_prices()
-            except Exception as exc:
-                logger.warning(
-                    "alchemy_fetch_failed: error=%s — skipping tick", str(exc)
-                )
-                alchemy_data = {}
-
-            try:
-                aapl_data = await fetch_aapl_price()
-            except Exception as exc:
-                logger.warning(
-                    "aapl_fetch_failed: error=%s — skipping AAPL tick", str(exc)
-                )
-                aapl_data = {}
-
-            cursor = assets_collection.find({})
-            async for asset in cursor:
-                asset_id: str = str(asset["id"])
-                current_price: float = float(asset["price"])
-                open_price_today: float = float(
-                    asset.get("openPriceToday", current_price)
-                )
-                last_reset_str: str = str(asset.get("lastDayReset", now.isoformat()))
-                sentiment_score: int = int(asset["sentimentScore"])
-
-                if asset_id in alchemy_data:
-                    feed = alchemy_data[asset_id]
-                    new_price: float = feed["price"]
-                    high24h: float = feed["high24h"]
-                    low24h: float = feed["low24h"]
-                    vol24h: int = int(feed["volume24h"])
-                elif asset_id == "AAPL" and aapl_data:
-                    new_price = aapl_data["price"]
-                    high24h = aapl_data["high24h"]
-                    low24h = aapl_data["low24h"]
-                    vol24h = int(aapl_data["volume24h"])
-                else:
-                    continue
-
-                if new_price <= 0.0:
-                    continue
-
-                # Daily reset check
-                last_reset_date = datetime.datetime.fromisoformat(last_reset_str).date()
-                if now.date() != last_reset_date:
-                    open_price_today = new_price
-                    last_reset_str = now.isoformat()
-                    await assets_collection.update_one(
-                        {"id": asset_id},
-                        {
-                            "$set": {
-                                "openPriceToday": open_price_today,
-                                "lastDayReset": last_reset_str,
-                                "high24h": new_price,
-                                "low24h": new_price,
-                            }
-                        },
-                    )
-
-                if open_price_today == 0.0:
-                    open_price_today = new_price
-                change24h = round(
-                    ((new_price - open_price_today) / open_price_today) * 100, 2
-                )
-
-                # Fetch Web3 on-chain metrics (Alchemy / Toncenter)
-                from backend.app.services.price_feed import fetch_onchain_metrics
-
-                onchain_data = await fetch_onchain_metrics(asset_id)
-
-                await assets_collection.update_one(
-                    {"id": asset_id},
-                    {
-                        "$set": {
-                            "price": new_price,
-                            "high24h": high24h,
-                            "low24h": low24h,
-                            "volume24h": vol24h,
-                            "change24h": change24h,
-                            "onchainMetrics": onchain_data if onchain_data else None,
-                        }
-                    },
-                )
-
-                # Push raw tick and VADER compound sentiment to Lock-protected RAM accumulator
-                from backend.app.services.aggregator import aggregator
-
-                normalized_vader = (sentiment_score - 50.0) / 50.0
-                await aggregator.add_tick(asset_id, new_price, normalized_vader)
-
-                await append_latest_candle(asset_id)
-                await check_alerts_for_asset(asset_id, new_price, sentiment_score)
-
-                # Fetch the freshly updated asset document and broadcast
-                updated_asset = await assets_collection.find_one({"id": asset_id})
-                if updated_asset:
-                    updated_asset.pop("_id", None)
-                    await ws_manager.broadcast_asset_update(asset_id, updated_asset)
-
-        except asyncio.CancelledError:
-            break
-        except Exception as exc:
-            logger.error("price_sync_error: %s", str(exc))
-
-
-# ──────────────────────────────────────────────────────────────────────────────
 # Alert checking
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -900,14 +545,14 @@ async def check_alerts_for_asset(
     Checks all untriggered user alerts for a given asset and triggers matching ones.
 
     Condition types:
-      - PRICE_ABOVE: triggers when current_price >= target_value
-      - PRICE_BELOW: triggers when current_price <= target_value
+      - PRICE_ABOVE:     triggers when current_price >= target_value
+      - PRICE_BELOW:     triggers when current_price <= target_value
       - SENTIMENT_CHANGE: triggers when current_sentiment crosses target_value
 
     Args:
-        asset_id: Ticker symbol of the asset being checked.
-        current_price: Latest price for the asset.
-        current_sentiment: Latest aggregated sentiment score (0-100).
+        asset_id:          Ticker symbol of the asset being checked.
+        current_price:     Latest price for the asset.
+        current_sentiment: Latest aggregated sentiment score (0–100).
     """
     from backend.app.core.database import users_collection
 
@@ -958,6 +603,162 @@ async def check_alerts_for_asset(
                 )
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Background price update loop — factory-driven, no per-asset conditionals
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+async def background_update_loop() -> None:
+    """
+    Syncs real market prices for all registered assets every 60 seconds.
+
+    Iterates AssetHandlerFactory.all() and calls handler.fetch_price() for each.
+    On handler failure, logs a warning and skips to the next asset (non-fatal).
+
+    On each tick per asset:
+      1. Checks if the UTC date has rolled over; resets `openPriceToday` if so.
+      2. Computes `change24h` as ((price - openPriceToday) / openPriceToday) * 100.
+      3. Appends a new 1H candle and checks alerts.
+      4. Broadcasts the updated AssetMetrics via WebSocket.
+    """
+    from backend.app.services.price_feed import fetch_onchain_metrics
+
+    while True:
+        try:
+            await asyncio.sleep(60.0)
+
+            now = datetime.datetime.now(datetime.timezone.utc)
+
+            for handler in handler_factory.all():
+                asset_id = handler.asset_id
+                tick_price: float | None = None
+
+                try:
+                    tick = await handler.fetch_price()
+                    tick_price = tick.price
+                    high24h = tick.high24h
+                    low24h = tick.low24h
+                    volume24h = int(tick.volume24h)
+                except Exception as exc:
+                    logger.warning(
+                        "price_fetch_failed: asset_id=%s error=%s — activating GBM simulator",
+                        asset_id,
+                        str(exc),
+                    )
+                    # GBM simulator fallback — keeps UI live with mathematically
+                    # realistic prices while the primary source recovers.
+                    from backend.app.services.simulator import simulate_price_tick
+
+                    asset_doc = await assets_collection.find_one({"id": asset_id})
+                    last_known_price: float = float(
+                        asset_doc["price"] if asset_doc else handler.base_price
+                    )
+                    tick_price = simulate_price_tick(
+                        current_price=last_known_price,
+                        volatility=handler.volatility,
+                    )
+                    high24h = round(tick_price * 1.005, 8)
+                    low24h = round(tick_price * 0.995, 8)
+                    volume24h = int(
+                        asset_doc.get("volume24h", handler.seed_volume)
+                        if asset_doc
+                        else handler.seed_volume
+                    )
+                    logger.info(
+                        "price_fetch_simulator_fallback: asset_id=%s simulated_price=%.4f",
+                        asset_id,
+                        tick_price,
+                    )
+
+                if tick_price is None or tick_price <= 0.0:
+                    continue
+
+                # Load current DB state for this asset (may have been read already
+                # in the simulator fallback branch; re-query to get the authoritative doc)
+                asset = await assets_collection.find_one({"id": asset_id})
+                if not asset:
+                    continue
+
+                open_price_today: float = float(asset.get("openPriceToday", tick_price))
+                last_reset_str: str = str(asset.get("lastDayReset", now.isoformat()))
+                sentiment_score: int = int(asset.get("sentimentScore", 50))
+
+                # Daily reset check — price resets the 24h window at midnight UTC
+                last_reset_date = datetime.datetime.fromisoformat(last_reset_str).date()
+                if now.date() != last_reset_date:
+                    open_price_today = tick_price
+                    last_reset_str = now.isoformat()
+                    await assets_collection.update_one(
+                        {"id": asset_id},
+                        {
+                            "$set": {
+                                "openPriceToday": open_price_today,
+                                "lastDayReset": last_reset_str,
+                                "high24h": tick_price,
+                                "low24h": tick_price,
+                            }
+                        },
+                    )
+
+                if open_price_today == 0.0:
+                    open_price_today = tick_price
+
+                change24h = round(
+                    ((tick_price - open_price_today) / open_price_today) * 100, 2
+                )
+
+                # Fetch on-chain metrics (ETH gas price, SOL TPS, TON stats)
+                onchain_data = await fetch_onchain_metrics(asset_id)
+
+                await assets_collection.update_one(
+                    {"id": asset_id},
+                    {
+                        "$set": {
+                            "price": tick_price,
+                            "high24h": high24h,
+                            "low24h": low24h,
+                            "volume24h": volume24h,
+                            "change24h": change24h,
+                            "onchainMetrics": onchain_data if onchain_data else None,
+                        }
+                    },
+                )
+
+                # Push tick to the in-memory aggregator
+                from backend.app.services.aggregator import aggregator
+
+                normalized_vader = (sentiment_score - 50.0) / 50.0
+                await aggregator.add_tick(asset_id, tick_price, normalized_vader)
+
+                await append_latest_candle(asset_id)
+                await check_alerts_for_asset(asset_id, tick_price, sentiment_score)
+
+                # Broadcast updated metrics over WebSocket
+                updated_asset = await assets_collection.find_one({"id": asset_id})
+                if updated_asset:
+                    from backend.app.schemas.market import AssetMetrics
+
+                    validated = AssetMetrics.model_validate(updated_asset).model_dump()
+                    await ws_manager.broadcast_asset_update(asset_id, validated)
+
+                logger.info(
+                    "price_sync_done: asset_id=%s price=%.4f change24h=%.2f",
+                    asset_id,
+                    tick_price,
+                    change24h,
+                )
+
+        except asyncio.CancelledError:
+            break
+        except Exception as exc:
+            logger.error("price_sync_loop_error: %s", str(exc))
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Hourly aggregation loop
+# ──────────────────────────────────────────────────────────────────────────────
+
+
 async def hourly_aggregation_loop() -> None:
     """
     Background worker that triggers the in-memory aggregator flush once an hour.
@@ -966,7 +767,6 @@ async def hourly_aggregation_loop() -> None:
 
     while True:
         try:
-            # Sleep for 1 hour (3600 seconds)
             await asyncio.sleep(3600.0)
             await aggregator.aggregate_and_flush()
         except asyncio.CancelledError:

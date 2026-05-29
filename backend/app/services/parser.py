@@ -244,8 +244,10 @@ async def _apply_sentiment_to_asset(asset_id: str, sentiment_score: float) -> No
 
     # Broadcast updated metrics directly to WebSocket room
     broadcast_doc = {**asset, **update_fields}
-    broadcast_doc.pop("_id", None)
-    await ws_manager.broadcast_asset_update(asset_id, broadcast_doc)
+    from backend.app.schemas.market import AssetMetrics
+
+    validated = AssetMetrics.model_validate(broadcast_doc).model_dump()
+    await ws_manager.broadcast_asset_update(asset_id, validated)
 
 
 async def process_unified_crypto_feed() -> None:

@@ -207,7 +207,7 @@ function handleMenuToggle(): void {
               : 'text-muted-foreground hover:text-foreground hover:bg-muted/40',
           ]"
           :style="timeframe === tf
-            ? { background: '#f59e0b', boxShadow: '0 0 12px rgba(245,158,11,0.30)' }
+            ? { background: 'var(--active-brand-color, #f59e0b)', boxShadow: '0 0 12px var(--active-brand-color-glow, rgba(245,158,11,0.30))' }
             : {}"
           :aria-label="`Set timeframe to ${tf}`"
           :aria-pressed="timeframe === tf"

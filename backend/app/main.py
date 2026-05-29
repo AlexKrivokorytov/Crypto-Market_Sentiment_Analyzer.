@@ -122,12 +122,23 @@ async def lifespan(app_inst: FastAPI) -> AsyncIterator[None]:
       Cancels all spawned tasks and awaits their termination.
     """
     from backend.app.core.database import ping_database, ensure_indexes
+    from backend.app.handlers.factory import handler_factory
     from backend.app.services.market_data import (
         seed_database_if_empty,
         background_update_loop,
         hourly_aggregation_loop,
     )
     from backend.app.services.parser import rss_parser_loop
+
+    # Bootstrap the asset handler factory — must happen before any seeding
+    # or background tasks that call handler_factory.all() / .get().
+    handler_factory.bootstrap()
+    log_event(
+        logging.INFO,
+        "handler_factory_bootstrapped",
+        total_assets=len(handler_factory),
+        assets=handler_factory.asset_ids(),
+    )
 
     is_render = os.environ.get("RENDER", "").lower() in ("true", "1", "yes")
 

@@ -28,27 +28,27 @@ apiClient.onError((status, detail, retry) => {
   if (status === 401) {
     authStore.logout()
     toast.show({
-      title: 'Сессия завершена',
-      message: detail || 'Токен авторизации недействителен или истек. Пожалуйста, войдите в аккаунт заново.',
+      title: 'Session Expired',
+      message: detail || 'Your authorization token is invalid or expired. Please sign in again.',
       type: 'warning',
       durationMs: 5000
     })
     router.push('/login')
   } else if (status === 429) {
     toast.show({
-      title: 'Превышен лимит запросов',
-      message: detail || 'Вы отправляете слишком много запросов. Пожалуйста, подождите некоторое время.',
+      title: 'Rate Limit Exceeded',
+      message: detail || 'You are sending too many requests. Please slow down and try again shortly.',
       type: 'warning',
       durationMs: 4000
     })
   } else if (status >= 500) {
     toast.show({
-      title: 'Сервер недоступен или просыпается',
-      message: detail || 'Бэкенд на Render просыпается после паузы (холодный старт) или временно перегружен.',
+      title: 'Service Unavailable (Spinning Up)',
+      message: detail || 'The backend is waking up (Render cold-start) or temporarily busy. Please stand by.',
       type: 'error',
       durationMs: 0, // Keep pinned until dismissed or retried
       action: {
-        label: 'Повторить запрос',
+        label: 'Retry Request',
         onClick: () => {
           retry().catch((err) => console.log('[GlobalErrorInterceptor] Manual retry failed:', err))
         }

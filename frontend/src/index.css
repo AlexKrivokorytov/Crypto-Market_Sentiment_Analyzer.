@@ -115,8 +115,8 @@
 
 .glass-card:hover {
   background: rgba(13, 16, 32, 0.70);
-  border-color: var(--gold-border);
-  box-shadow: 0 0 20px -4px var(--gold-glow), 0 12px 30px -10px rgba(0, 0, 0, 0.55);
+  border-color: var(--active-brand-color, var(--gold-border));
+  box-shadow: 0 0 20px -4px var(--active-brand-color-glow, var(--gold-glow)), 0 12px 30px -10px rgba(0, 0, 0, 0.55);
   transform: translateY(-2px);
 }
 
@@ -368,4 +368,21 @@
 
 .hover-scale-premium:active {
   transform: scale(0.985) translateY(0);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RESPONSIVE FLUID LAYOUT SYSTEM
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Fluid type scale (320px → 2560px viewport) */
+:root {
+  --text-base: clamp(0.875rem, 0.8rem + 0.25vw, 1rem);
+  --text-lg:   clamp(1rem, 0.9rem + 0.4vw, 1.25rem);
+}
+
+/* Dashboard grid: auto-fit from 1 col (mobile) → 3 cols (4K) */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  gap: clamp(0.75rem, 2vw, 1.5rem);
 }

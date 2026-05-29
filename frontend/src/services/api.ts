@@ -86,7 +86,19 @@ class ApiClient {
         let detail = response.statusText
         try {
           const body = await response.json()
-          detail = body.detail ?? body.message ?? detail
+          if (body.detail) {
+            if (Array.isArray(body.detail)) {
+              // Handle FastAPI Pydantic v2 validation error array [{loc, msg, type}]
+              detail = body.detail.map((err: any) => {
+                const field = err.loc ? err.loc.filter((l: any) => l !== 'body').join('.') : ''
+                return field ? `${field}: ${err.msg}` : err.msg
+              }).join('; ')
+            } else {
+              detail = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail)
+            }
+          } else {
+            detail = body.message ?? detail
+          }
         } catch {
           // Fallback to response.statusText if body is not JSON
         }
@@ -101,7 +113,7 @@ class ApiClient {
     } catch (err) {
       // Net connection / DNS failure (e.g. Server asleep or down)
       if (!(err instanceof Error) || !err.message.includes('API client request failed')) {
-        this.triggerError(504, 'Север недоступен. Проверьте соединение с сетью или подождите запуска бэкенда на Render.', () => this.request<T>(path, options))
+        this.triggerError(504, 'Server unreachable. Please check your connection or wait for the Render backend to finish spinning up.', () => this.request<T>(path, options))
       }
       throw err
     }

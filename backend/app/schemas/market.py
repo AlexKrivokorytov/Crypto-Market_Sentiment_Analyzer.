@@ -64,6 +64,16 @@ class AssetMetrics(BaseModel):
                 data["lastDayReset"] = datetime.datetime.now(
                     datetime.timezone.utc
                 ).isoformat()
+            if "name" not in data:
+                data["name"] = data.get("id", "Unknown Asset")
+            if "symbol" not in data:
+                data["symbol"] = data.get("id", "UNKNOWN")
+            if "volume24h" not in data:
+                data["volume24h"] = 0
+            if "high24h" not in data:
+                data["high24h"] = data.get("price", 0.0)
+            if "low24h" not in data:
+                data["low24h"] = data.get("price", 0.0)
         return data
 
     model_config = ConfigDict(from_attributes=True)

@@ -78,12 +78,12 @@ export function useToast() {
    */
   function showConnectionFailedToast(onRetry: () => void): string {
     return show({
-      title: 'Сбой соединения с сервером',
-      message: 'Превышено число попыток переподключения. Бэкенд на Render, возможно, «уснул» или перезагружается.',
+      title: 'Connection Offline',
+      message: 'Maximum reconnection attempts exceeded. The backend host might be restarting (Render cold-start).',
       type: 'error',
       durationMs: 0, // Pin to screen until dismissed or retried
       action: {
-        label: 'Повторить попытку',
+        label: 'Retry Connection',
         onClick: () => {
           onRetry()
         },
