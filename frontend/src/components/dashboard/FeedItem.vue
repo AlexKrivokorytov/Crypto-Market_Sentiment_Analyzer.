@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import type { SentimentArticle } from '@/types/market'
 import { MessageSquare, ArrowRight, ChevronDown, ChevronUp, Cpu, Calendar, ShieldCheck, Sparkles, Loader2 } from '@lucide/vue'
 
@@ -26,9 +26,6 @@ const triggerAiAnalysis = () => {
   }, 2000)
 }
 
-const isSimulated = computed(() => {
-  return props.article.llmReasoning.includes('(Simulated Analysis')
-})
 
 const formatTime = (isoString: string) => {
   const date = new Date(isoString)
@@ -68,12 +65,12 @@ const formatDate = (isoString: string) => {
         <span 
           class="px-2 py-0.5 rounded border text-[9px] uppercase font-extrabold tracking-wider"
           :class="[
-            isSimulated 
-              ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' 
-              : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+            article.is_fallback 
+              ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' 
+              : 'bg-violet-500/10 text-violet-400 border-violet-500/20'
           ]"
         >
-          {{ isSimulated ? 'Simulated' : 'AI Analyzed' }}
+          {{ article.is_fallback ? 'Local Algorithm (VADER)' : 'AI Analysis (LLaMA)' }}
         </span>
         <span
           class="px-2 py-0.5 rounded border text-[9px] uppercase font-extrabold tracking-wider"
@@ -158,10 +155,10 @@ const formatDate = (isoString: string) => {
       
       <!-- Heuristic Explanation Banner -->
       <div 
-        v-if="isSimulated" 
+        v-if="article.is_fallback" 
         class="p-3 rounded-xl bg-amber-500/5 border border-amber-500/10 text-[10px] text-amber-500/90 leading-relaxed"
       >
-        <strong>💡 Heuristic Mode:</strong> The backend is running in standalone simulation mode (no active LLM endpoint). Sentiment classification was computed instantly using optimized local natural language heuristics to keep the app fast and 100% useful.
+        <strong>💡 Local Fallback:</strong> The backend is running in standalone local fallback mode (remote LLM offline or unconfigured). Sentiment classification was computed instantly using optimized local natural language algorithms to guarantee fast response times and zero service interruption.
       </div>
 
       <p class="text-xs text-slate-400 leading-relaxed font-medium">

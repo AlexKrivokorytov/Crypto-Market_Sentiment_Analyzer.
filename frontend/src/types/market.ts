@@ -1,5 +1,5 @@
 /** Discriminated union of all valid asset ticker symbols tracked by the backend. */
-export type RouteAssetId = 'BTC' | 'ETH' | 'SOL' | 'AAPL' | 'TON' | 'XRP' | 'ADA'
+export type RouteAssetId = 'BTC' | 'ETH' | 'SOL' | 'AAPL' | 'TON' | 'XRP' | 'ADA' | 'DOGE' | 'DOT' | 'LINK' | 'AVAX' | 'MATIC' | 'SHIB' | 'LTC' | 'UNI' | 'NEAR' | 'ATOM'
 
 /** Sentiment classification label produced by the LLM analysis engine. */
 export type SentimentLabel = 'Bullish' | 'Bearish' | 'Neutral'
@@ -51,6 +51,7 @@ export interface SentimentArticle {
   confidence: number
   keywords: string[]
   llmReasoning: string
+  is_fallback: boolean
 }
 
 export interface UserPublic {

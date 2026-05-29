@@ -39,7 +39,24 @@ const { data: assets, isLoading } = useAssets()
 const { data: config, isLoading: configLoading, isError: configError } = useBackendConfig()
 
 /** Ordered crypto asset IDs — rendered in the CRYPTO section. */
-const CRYPTO_IDS: RouteAssetId[] = ['BTC', 'ETH', 'TON', 'SOL', 'XRP', 'ADA']
+const CRYPTO_IDS: RouteAssetId[] = [
+  'BTC',
+  'ETH',
+  'TON',
+  'SOL',
+  'XRP',
+  'ADA',
+  'DOGE',
+  'DOT',
+  'LINK',
+  'AVAX',
+  'MATIC',
+  'SHIB',
+  'LTC',
+  'UNI',
+  'NEAR',
+  'ATOM'
+]
 
 /** Crypto assets in canonical display order. */
 const cryptoAssets = computed<AssetMetrics[]>(() => {

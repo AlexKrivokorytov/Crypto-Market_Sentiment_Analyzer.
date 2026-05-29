@@ -54,7 +54,7 @@ async def _primary_fail() -> str:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_closed_primary_called_on_success() -> None:
     breaker = make_breaker()
     result = await breaker.call(primary=_primary_ok, fallback=_fallback_ok)
@@ -62,7 +62,7 @@ async def test_closed_primary_called_on_success() -> None:
     assert breaker.state == CircuitBreakerState.CLOSED
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_closed_failure_count_increments() -> None:
     breaker = make_breaker(failure_threshold=5)
     await breaker.call(primary=_primary_fail, fallback=_fallback_ok)
@@ -70,7 +70,7 @@ async def test_closed_failure_count_increments() -> None:
     assert breaker.state == CircuitBreakerState.CLOSED
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_closed_failure_below_threshold_stays_closed() -> None:
     breaker = make_breaker(failure_threshold=3)
     for _ in range(2):
@@ -79,7 +79,7 @@ async def test_closed_failure_below_threshold_stays_closed() -> None:
     assert breaker.failure_count == 2
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_closed_success_resets_failure_count() -> None:
     breaker = make_breaker(failure_threshold=3)
     await breaker.call(primary=_primary_fail, fallback=_fallback_ok)
@@ -94,7 +94,7 @@ async def test_closed_success_resets_failure_count() -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_trips_to_open_after_threshold() -> None:
     breaker = make_breaker(failure_threshold=3)
     for _ in range(3):
@@ -103,7 +103,7 @@ async def test_trips_to_open_after_threshold() -> None:
     assert result == "fallback_result"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_open_uses_fallback_immediately() -> None:
     """Once OPEN, primary should never be called."""
     breaker = make_breaker(failure_threshold=2, recovery_timeout=9999.0)
@@ -123,7 +123,7 @@ async def test_open_uses_fallback_immediately() -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_open_transitions_to_half_open_after_timeout() -> None:
     """Manually back-date _opened_at to force the OPEN → HALF_OPEN transition."""
     breaker = make_breaker(failure_threshold=2, recovery_timeout=0.0)
@@ -141,7 +141,7 @@ async def test_open_transitions_to_half_open_after_timeout() -> None:
     assert state_after_probe == CircuitBreakerState.CLOSED
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_half_open_success_closes_breaker() -> None:
     breaker = make_breaker(failure_threshold=2, recovery_timeout=0.0)
     for _ in range(2):
@@ -153,7 +153,7 @@ async def test_half_open_success_closes_breaker() -> None:
     assert breaker.failure_count == 0
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_half_open_failure_reopens_breaker() -> None:
     breaker = make_breaker(failure_threshold=2, recovery_timeout=0.0)
     for _ in range(2):
@@ -191,7 +191,7 @@ def test_initial_state_is_closed() -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_fallback_exception_propagates() -> None:
     """If both primary AND fallback fail, the fallback exception propagates."""
     breaker = make_breaker(failure_threshold=2, recovery_timeout=9999.0)
@@ -211,7 +211,7 @@ async def test_fallback_exception_propagates() -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_concurrent_calls_do_not_corrupt_state() -> None:
     """Fire 20 concurrent successful calls — state must remain CLOSED."""
     breaker = make_breaker(failure_threshold=3)

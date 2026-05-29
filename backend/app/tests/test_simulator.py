@@ -104,14 +104,14 @@ def test_simulate_price_tick_custom_interval() -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_simulate_ohlcv_candles_count() -> None:
     """Returns exactly n_candles rows."""
     rows = await simulate_ohlcv_candles(50_000.0, 0.005, n_candles=24)
     assert len(rows) == 24
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_simulate_ohlcv_candles_ohlcv_invariant() -> None:
     """For every candle: low <= open, low <= close, high >= open, high >= close."""
     rows = await simulate_ohlcv_candles(3_000.0, 0.008, n_candles=50)
@@ -122,7 +122,7 @@ async def test_simulate_ohlcv_candles_ohlcv_invariant() -> None:
         assert row.high >= row.close - 1e-9, f"high={row.high} < close={row.close}"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_simulate_ohlcv_candles_all_positive() -> None:
     """All OHLC values must be strictly positive."""
     rows = await simulate_ohlcv_candles(100.0, 0.05, n_candles=100)
@@ -133,7 +133,7 @@ async def test_simulate_ohlcv_candles_all_positive() -> None:
         assert row.close > 0.0
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_simulate_ohlcv_candles_chronological_order() -> None:
     """timestamp_ms must be strictly ascending (oldest candle first)."""
     rows = await simulate_ohlcv_candles(1_000.0, 0.01, n_candles=30, candle_minutes=60)
@@ -141,19 +141,19 @@ async def test_simulate_ohlcv_candles_chronological_order() -> None:
     assert timestamps == sorted(timestamps), "Candles are not in chronological order"
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_simulate_ohlcv_candles_raises_on_zero_price() -> None:
     with pytest.raises(ValueError, match="base_price must be > 0"):
         await simulate_ohlcv_candles(0.0, 0.005, n_candles=10)
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_simulate_ohlcv_candles_raises_on_negative_volatility() -> None:
     with pytest.raises(ValueError, match="volatility must be >= 0"):
         await simulate_ohlcv_candles(100.0, -0.01, n_candles=10)
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_simulate_ohlcv_candles_raises_on_zero_candles() -> None:
     with pytest.raises(ValueError, match="n_candles must be >= 1"):
         await simulate_ohlcv_candles(100.0, 0.01, n_candles=0)
@@ -164,7 +164,7 @@ async def test_simulate_ohlcv_candles_raises_on_zero_candles() -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 
 
-@pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_simulate_ohlcv_candles_does_not_block_event_loop() -> None:
     """200 × 60-min candles should complete well under 0.5 s wall-clock."""
     start = time.monotonic()

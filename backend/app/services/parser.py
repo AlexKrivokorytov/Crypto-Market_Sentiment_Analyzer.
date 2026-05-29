@@ -28,6 +28,16 @@ ASSET_REGEX: Dict[str, re.Pattern[str]] = {
     "SOL": re.compile(r"\b(solana|sol)\b", re.IGNORECASE),
     "XRP": re.compile(r"\b(ripple|xrp)\b", re.IGNORECASE),
     "ADA": re.compile(r"\b(cardano|ada)\b", re.IGNORECASE),
+    "DOGE": re.compile(r"\b(dogecoin|doge)\b", re.IGNORECASE),
+    "DOT": re.compile(r"\b(polkadot|dot)\b", re.IGNORECASE),
+    "LINK": re.compile(r"\b(chainlink|link)\b", re.IGNORECASE),
+    "AVAX": re.compile(r"\b(avalanche|avax)\b", re.IGNORECASE),
+    "MATIC": re.compile(r"\b(polygon|matic)\b", re.IGNORECASE),
+    "SHIB": re.compile(r"\b(shiba inu|shib)\b", re.IGNORECASE),
+    "LTC": re.compile(r"\b(litecoin|ltc)\b", re.IGNORECASE),
+    "UNI": re.compile(r"\b(uniswap|uni)\b", re.IGNORECASE),
+    "NEAR": re.compile(r"\b(near protocol|near)\b", re.IGNORECASE),
+    "ATOM": re.compile(r"\b(cosmos|atom)\b", re.IGNORECASE),
 }
 
 # Maximum articles processed per sweep to cap blocking time per loop iteration.
@@ -257,7 +267,8 @@ async def process_unified_crypto_feed() -> None:
     """
     query = (
         "crypto OR cryptocurrency OR bitcoin OR ethereum OR solana OR toncoin OR ripple OR cardano "
-        "OR BTC OR ETH OR SOL OR TON OR XRP OR ADA"
+        "OR dogecoin OR polkadot OR chainlink OR avalanche OR polygon OR shiba inu OR litecoin OR uniswap OR cosmos "
+        "OR BTC OR ETH OR SOL OR TON OR XRP OR ADA OR DOGE OR DOT OR LINK OR AVAX OR MATIC OR SHIB OR LTC OR UNI OR NEAR OR ATOM"
     )
     xml_content = await fetch_rss_feed(query)
     if not xml_content:
@@ -322,6 +333,7 @@ async def process_unified_crypto_feed() -> None:
                 "confidence": sentiment_data["confidence"],
                 "keywords": sentiment_data["keywords"],
                 "llmReasoning": sentiment_data["reasoning"],
+                "is_fallback": sentiment_data.get("is_fallback", False),
             }
 
             await articles_collection.insert_one(article_doc)
@@ -385,6 +397,7 @@ async def process_aapl_feed() -> None:
             "confidence": sentiment_data["confidence"],
             "keywords": sentiment_data["keywords"],
             "llmReasoning": sentiment_data["reasoning"],
+            "is_fallback": sentiment_data.get("is_fallback", False),
         }
 
         await articles_collection.insert_one(article_doc)

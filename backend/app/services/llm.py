@@ -226,10 +226,12 @@ async def analyze_article_sentiment(
     """
     Evaluates article sentiment with Circuit Breaker protection.
 
-    The Circuit Breaker wraps the local VADER engine (primary path) with
-    a template-based mock fallback. On 3 consecutive VADER failures the
-    breaker trips to OPEN and routes all calls to the fallback until
-    a 60-second recovery probe succeeds.
+    If settings.LLM_API_URL is not set, directly bypasses the circuit breaker
+    and uses the local VADER engine fallback, setting is_fallback = True.
+
+    If settings.LLM_API_URL is set, queries the remote LLM via the circuit breaker:
+      - Primary: Call remote LLM chat completions -> sets is_fallback = False.
+      - Fallback: Call local VADER engine -> sets is_fallback = True.
 
     Results are cached in-memory (TTL 1h) so cache hits bypass the
     circuit breaker entirely — no state changes from cached responses.
@@ -241,8 +243,10 @@ async def analyze_article_sentiment(
 
     Returns:
         Dict containing sentimentScore, sentimentLabel, confidence,
-        keywords, and reasoning.
+        keywords, reasoning, and is_fallback.
     """
+    from backend.app.core.config import settings
+
     # Pre-clean text to minimise prompt footprint and normalise cache keys
     cleaned_title = clean_text(title)
     cleaned_summary = clean_text(summary)
@@ -254,18 +258,79 @@ async def analyze_article_sentiment(
         logger.info("sentiment_local_cache_hit: asset=%s", asset_symbol)
         return cached_result
 
+    # 1. No remote LLM configured -> direct local VADER fallback
+    api_url = settings.LLM_API_URL
+    if not api_url:
+        local_res = analyze_sentiment_local(cleaned_title, cleaned_summary)
+        local_res["is_fallback"] = True
+        await llm_cache.set(cache_key, local_res)
+        return local_res
+
+    # 2. Remote LLM configured -> execute via circuit breaker FSM
     async def _primary() -> Dict[str, Any]:
-        """Calls the local VADER engine synchronously (CPU-bound, no I/O)."""
-        return analyze_sentiment_local(cleaned_title, cleaned_summary)
+        """Attempt calling remote LLM API."""
+        client = get_llm_client()
+        prompt = (
+            f"Analyze the sentiment of this article for the asset '{asset_symbol}'.\n"
+            f"Title: {title}\n"
+            f"Summary: {summary}\n\n"
+            f"You must return a JSON object matching this schema:\n"
+            f'{{"sentimentScore": float between -1.0 and 1.0, "sentimentLabel": "Bullish" | "Bearish" | "Neutral", "confidence": float between 0.0 and 1.0, "keywords": list of strings, "reasoning": "Chain-of-thought analysis"}}\n'
+        )
+        payload = {
+            "model": settings.LLM_MODEL,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You are a professional financial sentiment analyzer. Respond ONLY in valid JSON matching the schema.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            "response_format": {"type": "json_object"},
+            "temperature": 0.1,
+        }
+        resp = await client.post(
+            f"{api_url.rstrip('/')}/chat/completions",
+            json=payload,
+            timeout=15.0,
+        )
+        resp.raise_for_status()
+        resp_data = resp.json()
+        content = str(resp_data["choices"][0]["message"]["content"])
+
+        import json
+
+        parsed = json.loads(content)
+        sentiment_score = float(parsed.get("sentimentScore", 0.0))
+        sentiment_label = str(parsed.get("sentimentLabel", "Neutral"))
+        confidence = float(parsed.get("confidence", 0.8))
+        keywords = list(parsed.get("keywords", []))
+        reasoning = str(parsed.get("reasoning", "Analyzed by AI LLaMA model."))
+
+        sentiment_score = max(-1.0, min(1.0, sentiment_score))
+        if sentiment_label not in ["Bullish", "Bearish", "Neutral"]:
+            sentiment_label = "Neutral"
+        confidence = max(0.0, min(1.0, confidence))
+
+        return {
+            "sentimentScore": sentiment_score,
+            "sentimentLabel": sentiment_label,
+            "confidence": confidence,
+            "keywords": keywords,
+            "reasoning": reasoning,
+            "is_fallback": False,
+        }
 
     async def _fallback() -> Dict[str, Any]:
-        """Template-based heuristic fallback when VADER is unavailable."""
+        """Local VADER fallback when remote LLM fails/times out."""
         logger.warning(
-            "sentiment_fallback_used: asset=%s breaker_state=%s",
+            "sentiment_llm_fallback_triggered: asset=%s breaker_state=%s",
             asset_symbol,
             _sentiment_breaker.state.name,
         )
-        return _get_mock_sentiment(cleaned_title, cleaned_summary)
+        local_res = analyze_sentiment_local(cleaned_title, cleaned_summary)
+        local_res["is_fallback"] = True
+        return local_res
 
     result = await _sentiment_breaker.call(
         primary=_primary,

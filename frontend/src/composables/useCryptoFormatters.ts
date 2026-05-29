@@ -22,6 +22,16 @@ const ASSET_BRAND_COLORS: Readonly<Record<RouteAssetId, string>> = {
   XRP: '#00AAE4',  // Ripple cyan
   ADA: '#3CC8C8',  // Cardano teal
   AAPL: '#A2AAAD', // Apple silver
+  DOGE: '#C2A633', // Dogecoin gold
+  DOT: '#E6007A',  // Polkadot pink
+  LINK: '#375BD2', // Chainlink blue
+  AVAX: '#E84142', // Avalanche red
+  MATIC: '#8247E5', // Polygon purple
+  SHIB: '#FFA300', // Shiba Inu orange
+  LTC: '#345D9D',  // Litecoin blue-grey
+  UNI: '#FF007A',  // Uniswap pink
+  NEAR: '#00C1DE', // Near blue-cyan
+  ATOM: '#7A88FF', // Cosmos indigo
 }
 
 /** Two-stop CSS linear-gradient for card tinted backgrounds. */
@@ -33,6 +43,16 @@ const ASSET_GRADIENTS: Readonly<Record<RouteAssetId, string>> = {
   XRP:  'linear-gradient(135deg, rgba(0,  170, 228, 0.12) 0%, rgba(0,  170, 228, 0.02) 100%)',
   ADA:  'linear-gradient(135deg, rgba(60,  200, 200, 0.12) 0%, rgba(60,  200, 200, 0.02) 100%)',
   AAPL: 'linear-gradient(135deg, rgba(162, 170, 173, 0.10) 0%, rgba(162, 170, 173, 0.02) 100%)',
+  DOGE:  'linear-gradient(135deg, rgba(194, 166, 51, 0.12) 0%, rgba(194, 166, 51, 0.02) 100%)',
+  DOT:   'linear-gradient(135deg, rgba(230, 0, 122, 0.12) 0%, rgba(230, 0, 122, 0.02) 100%)',
+  LINK:  'linear-gradient(135deg, rgba(55, 91, 210, 0.12) 0%, rgba(55, 91, 210, 0.02) 100%)',
+  AVAX:  'linear-gradient(135deg, rgba(232, 65, 66, 0.12) 0%, rgba(232, 65, 66, 0.02) 100%)',
+  MATIC: 'linear-gradient(135deg, rgba(130, 71, 229, 0.12) 0%, rgba(130, 71, 229, 0.02) 100%)',
+  SHIB:  'linear-gradient(135deg, rgba(255, 163, 0, 0.12) 0%, rgba(255, 163, 0, 0.02) 100%)',
+  LTC:   'linear-gradient(135deg, rgba(52, 93, 157, 0.12) 0%, rgba(52, 93, 157, 0.02) 100%)',
+  UNI:   'linear-gradient(135deg, rgba(255, 0, 122, 0.12) 0%, rgba(255, 0, 122, 0.02) 100%)',
+  NEAR:  'linear-gradient(135deg, rgba(0, 193, 222, 0.12) 0%, rgba(0, 193, 222, 0.02) 100%)',
+  ATOM:  'linear-gradient(135deg, rgba(122, 136, 255, 0.12) 0%, rgba(122, 136, 255, 0.02) 100%)',
 }
 
 /**

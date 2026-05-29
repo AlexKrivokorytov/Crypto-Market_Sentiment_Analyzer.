@@ -130,6 +130,10 @@ class SentimentArticle(BaseModel):
         ...,
         description="LLM Chain-of-thought analysis explaining the classification reasoning",
     )
+    is_fallback: bool = Field(
+        False,
+        description="Indicates if the sentiment was evaluated using the local VADER fallback",
+    )
 
     model_config = ConfigDict(from_attributes=True)
 

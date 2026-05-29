@@ -86,8 +86,8 @@ def test_get_known_asset_returns_handler(factory: AssetHandlerFactory) -> None:
 
 
 def test_get_unknown_asset_raises_key_error(factory: AssetHandlerFactory) -> None:
-    with pytest.raises(KeyError, match="DOGE"):
-        factory.get("DOGE")
+    with pytest.raises(KeyError, match="XYZ"):
+        factory.get("XYZ")
 
 
 def test_all_returns_list_of_handlers(factory: AssetHandlerFactory) -> None:
