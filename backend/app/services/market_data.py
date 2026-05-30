@@ -146,48 +146,43 @@ def generate_single_mock_article(
 async def seed_database_if_empty() -> None:
     """
     Checks MongoDB collection states and seeds defaults if empty.
-
-    Asset seed documents come from handler.to_seed_document() so that
-    seed data is always in sync with HANDLER_CONFIG — no duplication.
-
-    Seeds:
-      - Assets into `assets_collection` when empty (factory-driven).
-      - Mock articles into `articles_collection` when empty.
-      - Historical candles for all assets × timeframes when empty.
-
-    Raises:
-        Exception: Propagates any MongoDB error after logging it.
+    Ensures newly added assets from handler_factory are automatically registered
+    and seeded with initial articles and historical candles.
     """
     try:
-        asset_count = await assets_collection.count_documents({})
-        if asset_count == 0:
-            logger.info("Assets collection empty — seeding from handler factory.")
-            seed_docs = [h.to_seed_document() for h in handler_factory.all()]
-            await assets_collection.insert_many(seed_docs)
-            logger.info(
-                "db_seed_assets_done: count=%d assets=%s",
-                len(seed_docs),
-                [h.asset_id for h in handler_factory.all()],
-            )
+        # Enforce registration of every asset configured in handler_factory
+        for handler in handler_factory.all():
+            existing_asset = await assets_collection.find_one({"id": handler.asset_id})
+            if not existing_asset:
+                logger.info(
+                    "db_seed_asset_incremental: asset=%s display_name=%s registered.",
+                    handler.asset_id,
+                    handler.name,
+                )
+                await assets_collection.insert_one(handler.to_seed_document())
 
-        art_count = await articles_collection.count_documents({})
-        if art_count == 0:
-            logger.info("Articles collection empty — seeding historical articles.")
-            now = datetime.datetime.now(datetime.timezone.utc)
-            seed_articles: List[Dict[str, Any]] = []
-
-            for handler in handler_factory.all():
-                for i in range(10):
-                    ts = now - datetime.timedelta(minutes=i * 45)
-                    seed_articles.append(
-                        generate_single_mock_article(handler.asset_id, handler.name, ts)
+                # Seed initial mock articles for this newly registered asset
+                art_count = await articles_collection.count_documents(
+                    {"asset_id": handler.asset_id}
+                )
+                if art_count == 0:
+                    logger.info(
+                        "db_seed_articles_incremental: seeding initial articles for asset=%s",
+                        handler.asset_id,
                     )
+                    now = datetime.datetime.now(datetime.timezone.utc)
+                    seed_articles: List[Dict[str, Any]] = []
+                    for i in range(10):
+                        ts = now - datetime.timedelta(minutes=i * 45)
+                        seed_articles.append(
+                            generate_single_mock_article(
+                                handler.asset_id, handler.name, ts
+                            )
+                        )
+                    if seed_articles:
+                        await articles_collection.insert_many(seed_articles)
 
-            if seed_articles:
-                await articles_collection.insert_many(seed_articles)
-                logger.info("db_seed_articles_done: count=%d", len(seed_articles))
-
-        # Seed historical candles for every asset × timeframe
+        # Seed historical candles for every asset × timeframe if not already present
         for handler in handler_factory.all():
             for timeframe in ("1H", "24H", "7D", "30D"):
                 await seed_historical_candles(handler.asset_id, timeframe)
