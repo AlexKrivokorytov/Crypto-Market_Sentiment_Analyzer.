@@ -5,7 +5,7 @@
 [![Build & E2E Validation](https://img.shields.io/badge/Build--Validation-Passing-059669?style=for-the-badge&logo=github-actions&logoColor=white)](https://github.com)
 [![Vue 3 Composition API](https://img.shields.io/badge/Vue--3--Composition--TS-Strict--No--Emit-41B883?style=for-the-badge&logo=vue.js&logoColor=white)](https://vuejs.org)
 [![FastAPI Async](https://img.shields.io/badge/FastAPI-Fully--Async--0.136+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![Google Gemma LLM](https://img.shields.io/badge/AI--Engine-Google--Gemma--31B-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://openrouter.ai/)
+[![Google Gemini 2.0 Flash](https://img.shields.io/badge/AI--Engine-Google--Gemini--2.0--Flash-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://openrouter.ai/)
 [![Docker Multi-Network](https://img.shields.io/badge/Docker-Hardened--Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com)
 
 **An Enterprise-grade, high-frequency cryptocurrency and equity sentiment intelligence dashboard.**  
@@ -27,7 +27,7 @@ Engineered with async-safe design patterns, FSM circuit breakers, log-normal mar
 |---------|-------------|-------|
 | **🚀 Factory-Driven Scalability** | Fully abstracts data fetching. Adding new crypto/stocks requires changing **one line of config**. | *SOLID, Abstract Base Classes* |
 | **🛡️ 3-State FSM Circuit Breaker** | Instantly catches downstream LLM/API timeouts and redirects to local fallback without freezing the Event Loop. | *FastAPI, Asyncio* |
-| **🧠 Real-Time AI Sentiment** | Ingests live Google News RSS feeds and analyzes them asynchronously via Google Gemma (via OpenRouter). | *OpenRouter, httpx* |
+| **🧠 Real-Time AI Sentiment** | Ingests live Google News RSS feeds and analyzes them asynchronously via Gemini 2.0 Flash (via OpenRouter). | *OpenRouter, httpx* |
 | **🧮 GBM Market Simulator** | Generates log-normal Geometric Brownian Motion simulated prices when external APIs hit Rate Limits (429). | *NumPy, Async Threading* |
 | **🎨 Premium Fluid UI** | Beautiful Glassmorphism, CSS `@container` queries, 60Hz WebSocket reactive rendering, and high-fidelity `<TransitionGroup>` animation system for live news. | *Vue 3, Tailwind, ECharts* |
 | **🔐 Hardened Docker Topologies** | Private internal-only networks for MongoDB. Strict auth enforced, matching Atlas cloud parity. | *Docker Compose* |
@@ -62,7 +62,7 @@ graph TD
     end
 
     subgraph AI["AI Pipeline / Fallback"]
-        LLM_API["Google Gemma via OpenRouter"]
+        LLM_API["Gemini 2.0 Flash via OpenRouter"]
         Vader["Local VADER Sentiment Engine"]
     end
 
@@ -109,7 +109,7 @@ MONGODB_DB_NAME=sentiment_db
 
 # OpenRouter AI Sentiment Pipeline
 LLM_API_URL=https://openrouter.ai/api/v1
-LLM_MODEL=google/gemma-4-31b-it:free
+LLM_MODEL=google/gemini-2.0-flash-exp
 LLM_API_KEY=your_openrouter_key
 
 # secure hex key (generate with python -c "import secrets; print(secrets.token_hex(32))")
@@ -127,8 +127,6 @@ docker compose up --build -d
 ### 4. Access the Platform
 - 📊 **Production Live Dashboard**: [https://crypto-market-sentiment-analyzer-1.onrender.com](https://crypto-market-sentiment-analyzer-1.onrender.com)
 - 🧠 **Production API Sandbox**: [https://crypto-market-sentiment-analyzer-1.onrender.com/docs](https://crypto-market-sentiment-analyzer-1.onrender.com/docs)
-- 🏠 **Local Live Dashboard**: [http://localhost:8080](http://localhost:8080)
-- 🔌 **Local API Swagger Sandbox**: [http://localhost:8000/docs](http://localhost:8000/docs)
 
 ---
 

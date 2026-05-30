@@ -18,8 +18,11 @@ from backend.app.handlers.factory import handler_factory
 from backend.app.services.market_data import seed_database_if_empty
 
 # Set up logging to console
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger("reset_db")
+
 
 async def reset_and_seed() -> None:
     logger.info("🚀 Starting database reset and seeding process...")
@@ -41,12 +44,17 @@ async def reset_and_seed() -> None:
     # 3. Bootstrap handler factory
     logger.info("⚙️ Bootstrapping asset handler factory...")
     handler_factory.bootstrap()
-    logger.info(f"✅ Handler factory ready with {len(handler_factory)} assets: {handler_factory.asset_ids()}")
+    logger.info(
+        f"✅ Handler factory ready with {len(handler_factory)} assets: {handler_factory.asset_ids()}"
+    )
 
     # 4. Seed database from scratch
     logger.info("🌱 Seeding database with fresh asset metrics, articles, and charts...")
     await seed_database_if_empty()
-    logger.info("🎉 Database seeding complete! Your database is now 100% clean and fully seeded.")
+    logger.info(
+        "🎉 Database seeding complete! Your database is now 100% clean and fully seeded."
+    )
+
 
 if __name__ == "__main__":
     # Run the async script

@@ -118,19 +118,23 @@
   border-color: var(--active-brand-color, var(--gold-border));
   box-shadow: 0 0 20px -4px var(--active-brand-color-glow, var(--gold-glow)), 0 12px 30px -10px rgba(0, 0, 0, 0.55);
   transform: translateY(-2px);
+  z-index: 10;
 }
 
 /* Bento grid card — no hover transform (used in grid, not interactive standalone) */
 .bento-card {
+  position: relative;
+  z-index: 1;
   background: rgba(13, 16, 32, 0.50);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.055);
   border-radius: 1.25rem;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, z-index 0s;
 }
 
 .bento-card:hover {
+  z-index: 10;
   border-color: rgba(255, 255, 255, 0.10);
   box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.45);
 }
@@ -359,10 +363,13 @@
 
 /* Scale + lift on interactive cards — 150–300ms per UI-UX Pro Max §7 */
 .hover-scale-premium {
+  position: relative;
+  z-index: 1;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .hover-scale-premium:hover {
+  z-index: 10;
   transform: scale(1.015) translateY(-1px);
 }
 

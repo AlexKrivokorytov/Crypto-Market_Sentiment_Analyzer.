@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     MONGODB_DB_NAME: str = "sentiment_db"
 
     LLM_API_URL: Optional[str] = None
-    LLM_MODEL: str = "local-model"
+    LLM_MODEL: str = "google/gemini-2.0-flash-exp"
     LLM_API_KEY: Optional[str] = None
 
     JWT_SECRET_KEY: str = "CHANGE_ME_IN_PRODUCTION_USE_ENV_VAR"
