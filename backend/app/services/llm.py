@@ -1,49 +1,78 @@
 """
-Service layer for LLM (LM Studio / Ollama) sentiment analysis integration.
+Service layer for OpenRouter LLM sentiment analysis.
+
+Rate-limiting strategy
+----------------------
+OpenRouter's free tier allows 20 requests per minute across all models.
+The background RSS crawler and user manual clicks share this budget.
+
+To guarantee that manual user clicks always succeed:
+  - A global TokenBucket enforces a conservative cap of 10 req/min for
+    background (non-priority) callers.
+  - User clicks (bypass_breaker=True) bypass the bucket entirely and
+    attempt the API call immediately with priority.
+  - On a 429 response, the caller retries once after a short backoff;
+    on a second 429 it falls back to the local VADER engine.
 """
 
 import asyncio
+import json
 import logging
 import random
 import re
 import time
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, TypedDict, cast
+
 import httpx
 
 from backend.app.core.circuit_breaker import CircuitBreaker
 from backend.app.services.sentiment_engine import analyze_sentiment_local
 
+
+class SentimentResult(TypedDict, total=False):
+    sentimentScore: float
+    sentimentLabel: str
+    confidence: float
+    keywords: List[str]
+    reasoning: str
+    is_fallback: bool
+
+
 logger = logging.getLogger("app")
 
-# Local pre-packaged templates for instant simulation
-SIMULATED_TEMPLATES = {
+# ──────────────────────────────────────────────────────────────────────────────
+# Simulated fallback templates (used when no LLM is configured or as the last
+# resort when both the API and VADER fail).
+# ──────────────────────────────────────────────────────────────────────────────
+
+SIMULATED_TEMPLATES: Dict[str, List[Dict[str, Any]]] = {
     "BULLISH": [
         {
-            "reasoning": "The recent positive developments and rising buying momentum suggest strong upward pressure. General institutional interest continues to bid up the asset.",
+            "reasoning": "Positive macro developments and rising buying momentum suggest strong upward pressure. Institutional interest continues to bid up the asset.",
             "keywords": ["momentum", "growth", "institution", "adoption"],
         },
         {
-            "reasoning": "Technical parameters indicate that a key macro level has been cleared on above-average volume, confirming a bullish structure.",
+            "reasoning": "A key macro level was cleared on above-average volume, confirming a bullish market structure.",
             "keywords": ["technical", "breakout", "volume", "momentum"],
         },
     ],
     "BEARISH": [
         {
-            "reasoning": "Short-term macro headwinds and tightening regulations are causing concerns. Retail panic could drive near-term selling.",
+            "reasoning": "Macro headwinds and tightening regulations are fuelling concern. Retail panic could drive near-term selling.",
             "keywords": ["regulation", "risk", "outflow", "derisking"],
         },
         {
-            "reasoning": "Security risks or negative technical divergence indicates that key support zones are being tested and might break.",
+            "reasoning": "Negative technical divergence signals that key support zones are under pressure and may break.",
             "keywords": ["security", "bearish", "divergence", "support"],
         },
     ],
     "NEUTRAL": [
         {
-            "reasoning": "The asset is currently consolidating in a tight trading range. No immediate macro catalyst is driving price in either direction.",
+            "reasoning": "The asset is consolidating in a tight range with no immediate macro catalyst driving price in either direction.",
             "keywords": ["consolidation", "neutral", "range", "expiry"],
         },
         {
-            "reasoning": "General discussions and conference panels offer long-term branding value but present no immediate impact on price actions.",
+            "reasoning": "Conference-level discussions provide long-term branding value but carry no immediate price impact.",
             "keywords": ["discussion", "conference", "branding", "panel"],
         },
     ],
@@ -52,11 +81,17 @@ SIMULATED_TEMPLATES = {
 
 def _get_mock_sentiment(title: str, summary: str) -> Dict[str, Any]:
     """
-    Analyzes content heuristically and matches templates for simulated scenarios.
+    Heuristic template-based fallback when no LLM is available.
+
+    Args:
+        title:   Article headline.
+        summary: Article body or excerpt.
+
+    Returns:
+        Dict with sentimentScore, sentimentLabel, confidence, keywords, reasoning.
     """
     text = (title + " " + summary).lower()
-
-    bullish_keywords = [
+    bullish_kw = [
         "surge",
         "breakout",
         "growth",
@@ -70,7 +105,7 @@ def _get_mock_sentiment(title: str, summary: str) -> Dict[str, Any]:
         "launch",
         "all-time",
     ]
-    bearish_keywords = [
+    bearish_kw = [
         "drop",
         "fall",
         "down",
@@ -85,50 +120,62 @@ def _get_mock_sentiment(title: str, summary: str) -> Dict[str, Any]:
         "crash",
         "sell",
     ]
-
-    bull_hits = sum(1 for kw in bullish_keywords if kw in text)
-    bear_hits = sum(1 for kw in bearish_keywords if kw in text)
+    bull_hits = sum(1 for kw in bullish_kw if kw in text)
+    bear_hits = sum(1 for kw in bearish_kw if kw in text)
 
     if bull_hits > bear_hits:
-        sentiment_label = "Bullish"
-        sentiment_score = round(0.3 + (random.random() * 0.6), 2)
+        label = "Bullish"
+        score = round(0.3 + random.random() * 0.6, 2)
     elif bear_hits > bull_hits:
-        sentiment_label = "Bearish"
-        sentiment_score = round(-0.3 - (random.random() * 0.6), 2)
+        label = "Bearish"
+        score = round(-0.3 - random.random() * 0.6, 2)
     else:
-        sentiment_label = "Neutral"
-        sentiment_score = round((random.random() - 0.5) * 0.3, 2)
+        label = "Neutral"
+        score = round((random.random() - 0.5) * 0.3, 2)
 
-    templates = SIMULATED_TEMPLATES[sentiment_label.upper()]
-    template = random.choice(templates)
-    reasoning = (
-        str(template["reasoning"]) + "\n\n(Simulated Analysis - No LLM Configured)"
-    )
-
+    templates = SIMULATED_TEMPLATES[label.upper()]
+    tpl = random.choice(templates)
+    reasoning = str(tpl["reasoning"]) + "\n\n(Simulated Analysis — No LLM Configured)"
     return {
-        "sentimentScore": sentiment_score,
-        "sentimentLabel": sentiment_label,
-        "confidence": round(0.7 + (random.random() * 0.25), 2),
-        "keywords": template["keywords"],
+        "sentimentScore": score,
+        "sentimentLabel": label,
+        "confidence": round(0.7 + random.random() * 0.25, 2),
+        "keywords": list(tpl["keywords"]),
         "reasoning": reasoning,
     }
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# In-memory LLM result cache
+# ──────────────────────────────────────────────────────────────────────────────
+
+
 class LLMAnalysisCache:
     """
-    In-memory async-safe cache for LLM analysis results.
-    Prevents redundant API calls to external or local ИИ models.
+    Async-safe in-memory LRU+TTL cache for LLM analysis results.
+
+    Prevents redundant API calls for identical article content within
+    a 1-hour window. The cache is bypassed for user-triggered manual
+    analysis requests (bypass_breaker=True).
     """
 
     def __init__(self, maxsize: int = 200, ttl_seconds: int = 3600) -> None:
+        """
+        Args:
+            maxsize:     Maximum entries before FIFO eviction kicks in.
+            ttl_seconds: Seconds before a cached entry expires.
+        """
         self.maxsize = maxsize
         self.ttl_seconds = ttl_seconds
-        self.cache: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+        self.cache: Dict[str, Tuple[float, SentimentResult]] = {}
         self.lock = asyncio.Lock()
 
-    async def get(self, key: str) -> Optional[Dict[str, Any]]:
+    async def get(self, key: str) -> Optional[SentimentResult]:
         """
-        Retrieves analysis result from cache if present and not expired.
+        Returns the cached value if present and not expired, else None.
+
+        Args:
+            key: Cache key string.
         """
         async with self.lock:
             if key not in self.cache:
@@ -139,31 +186,65 @@ class LLMAnalysisCache:
                 return None
             return data
 
-    async def set(self, key: str, value: Dict[str, Any]) -> None:
+    async def set(self, key: str, value: SentimentResult) -> None:
         """
-        Stores the analysis result in cache, evicting the oldest element if maxsize exceeded.
+        Stores a result in cache with FIFO eviction when full.
+
+        Args:
+            key:   Cache key string.
+            value: Result dict to cache.
         """
         async with self.lock:
             if len(self.cache) >= self.maxsize:
-                # FIFO eviction
                 oldest = next(iter(self.cache))
                 self.cache.pop(oldest, None)
             self.cache[key] = (time.time(), value)
 
 
-# Module-level singleton instance for the LLM cache
+# Module-level singleton cache
 llm_cache = LLMAnalysisCache()
 
+
 # ──────────────────────────────────────────────────────────────────────────────
-# Circuit Breaker for the sentiment analysis path
+# Token-bucket rate limiter
 #
-# Primary:  analyze_sentiment_local() — deterministic local VADER engine
-# Fallback: _get_mock_sentiment()     — heuristic keyword template matcher
-#
-# State transitions are logged at WARNING level for observability.
-# failure_threshold=3 means 3 consecutive VADER errors trip the breaker.
-# recovery_timeout=60s means the breaker probes again after 1 minute.
+# Caps background crawler calls to MAX_BACKGROUND_RPM requests/min.
+# User manual clicks (bypass_breaker=True) bypass the bucket entirely.
 # ──────────────────────────────────────────────────────────────────────────────
+
+# Background callers may use at most this many OpenRouter requests per minute.
+# Leaves the remainder of the free-tier 20 RPM budget for user clicks.
+_MAX_BACKGROUND_RPM: int = 8
+_WINDOW_SECONDS: float = 60.0
+
+# Sliding window of timestamps for background calls issued in the last minute
+_bg_call_timestamps: List[float] = []
+_bg_rate_lock = asyncio.Lock()
+
+
+async def _background_rate_limit_ok() -> bool:
+    """
+    Returns True if a background LLM call may proceed under the rate limit.
+
+    Implements a sliding-window counter over the last 60 seconds.
+    Does NOT block — returns immediately so the caller can fall back to VADER.
+    """
+    async with _bg_rate_lock:
+        now = time.monotonic()
+        cutoff = now - _WINDOW_SECONDS
+        # Evict expired timestamps
+        while _bg_call_timestamps and _bg_call_timestamps[0] < cutoff:
+            _bg_call_timestamps.pop(0)
+        if len(_bg_call_timestamps) >= _MAX_BACKGROUND_RPM:
+            return False
+        _bg_call_timestamps.append(now)
+        return True
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Circuit Breaker for the background crawler path only
+# ──────────────────────────────────────────────────────────────────────────────
+
 _sentiment_breaker = CircuitBreaker(
     name="sentiment_engine",
     failure_threshold=3,
@@ -173,156 +254,291 @@ _sentiment_breaker = CircuitBreaker(
 
 def clean_text(text: str) -> str:
     """
-    Cleans raw input text to minimize prompt size and optimize token usage.
-    Removes HTML markup, URLs, extra whitespaces, and standard boilerplates.
+    Strips HTML tags, URLs, and common boilerplate from article text.
 
     Args:
-        text: The raw source text string.
+        text: Raw source text.
 
     Returns:
-        The cleaned, standardized text string.
+        Cleaned, whitespace-normalised text.
     """
-    # Remove HTML tags
     text = re.sub(r"<[^>]*>", "", text)
-    # Remove absolute URLs
     text = re.sub(r"https?://\S+|www\.\S+", "", text)
-
-    # Remove common newsletter RSS boilerplates
-    boilerplates = [
+    for bp in [
         "click here to read more",
         "read more on",
         "all rights reserved",
         "copyright",
-    ]
-    for bp in boilerplates:
+    ]:
         text = re.compile(re.escape(bp), re.IGNORECASE).sub("", text)
-
     return " ".join(text.split())
 
 
-# RESERVED: Retained for future Ollama / LM Studio integration.
-# When LLM_API_URL is configured, this client replaces the local VADER engine
-# with a remote model call. Currently unused — analyze_sentiment_local is the
-# sole analysis path.
+# Shared singleton httpx client for all OpenRouter calls
 _llm_client: Optional[httpx.AsyncClient] = None
 
 
 def get_llm_client() -> httpx.AsyncClient:
     """
-    Returns a shared singleton instance of AsyncClient for LLM queries.
+    Returns the shared AsyncClient, creating it on first call.
 
-    Reserved for future Ollama / LM Studio integration via LLM_API_URL.
-    Currently not called by any active code path.
+    Returns:
+        A reusable httpx.AsyncClient with a 30-second timeout.
     """
     global _llm_client
     if _llm_client is None:
-        _llm_client = httpx.AsyncClient(timeout=60.0)
+        _llm_client = httpx.AsyncClient(timeout=15.0)
     return _llm_client
 
 
-async def analyze_article_sentiment(
-    title: str, summary: str, asset_symbol: str
-) -> Dict[str, Any]:
+def _parse_llm_json(content: str) -> SentimentResult:
     """
-    Evaluates article sentiment with Circuit Breaker protection.
+    Extracts and normalises the JSON object from an LLM response string.
 
-    If settings.LLM_API_URL is not set, directly bypasses the circuit breaker
-    and uses the local VADER engine fallback, setting is_fallback = True.
-
-    If settings.LLM_API_URL is set, queries the remote LLM via the circuit breaker:
-      - Primary: Call remote LLM chat completions -> sets is_fallback = False.
-      - Fallback: Call local VADER engine -> sets is_fallback = True.
-
-    Results are cached in-memory (TTL 1h) so cache hits bypass the
-    circuit breaker entirely — no state changes from cached responses.
+    Handles both clean JSON and JSON wrapped in markdown code fences.
+    Uses case-insensitive key lookup to tolerate camelCase/snake_case drift.
 
     Args:
-        title:        The headline title of the article.
-        summary:      The short summary text of the article.
-        asset_symbol: The asset ticker symbol for cache keying and logging.
+        content: Raw string returned by the LLM.
 
     Returns:
-        Dict containing sentimentScore, sentimentLabel, confidence,
-        keywords, reasoning, and is_fallback.
+        Normalised dict with sentimentScore, sentimentLabel, confidence,
+        keywords, and reasoning keys.
+
+    Raises:
+        ValueError: If no valid JSON object can be extracted or parsed.
+    """
+    match = re.search(r"\{[\s\S]*\}", content)
+    if not match:
+        raise ValueError(f"No JSON object found in LLM response: {content[:200]!r}")
+
+    parsed: Dict[str, Any] = json.loads(match.group(0))
+
+    def _get(*keys: str, default: Any = None) -> Any:
+        for k in keys:
+            if k in parsed:
+                return parsed[k]
+            norm = k.lower().replace("_", "")
+            for dk, dv in parsed.items():
+                if dk.lower().replace("_", "") == norm:
+                    return dv
+        return default
+
+    raw_score = _get("sentimentScore", "sentiment_score", default=0.0)
+    score = float(raw_score) if raw_score is not None else 0.0
+    score = max(-1.0, min(1.0, score))
+
+    raw_label = _get("sentimentLabel", "sentiment_label", default="Neutral")
+    label = str(raw_label).strip().capitalize() if raw_label is not None else "Neutral"
+    if label not in ("Bullish", "Bearish", "Neutral"):
+        label = "Neutral"
+
+    raw_conf = _get("confidence", default=0.8)
+    conf = float(raw_conf) if raw_conf is not None else 0.8
+    conf = max(0.0, min(1.0, conf))
+
+    raw_kw = _get("keywords", default=[])
+    keywords: List[str] = list(raw_kw) if isinstance(raw_kw, list) else []
+
+    raw_reason = _get("reasoning", default="Analyzed by AI model.")
+    reasoning = str(raw_reason) if raw_reason is not None else "Analyzed by AI model."
+
+    return {
+        "sentimentScore": score,
+        "sentimentLabel": label,
+        "confidence": conf,
+        "keywords": keywords,
+        "reasoning": reasoning,
+    }
+
+
+async def _call_openrouter(
+    title: str,
+    summary: str,
+    asset_symbol: str,
+    priority: bool = False,
+) -> SentimentResult:
+    """
+    Makes a single POST request to OpenRouter's chat completions endpoint.
+
+    Background calls (priority=False) do NOT retry on 429 — they raise
+    immediately so the circuit breaker can route to VADER without wasting
+    a second API slot.
+
+    Priority calls (priority=True, i.e. user manual clicks) retry once with
+    a 10-second backoff before raising, since the user is waiting for a result.
+
+    Args:
+        title:        Article headline.
+        summary:      Article summary text.
+        asset_symbol: Ticker symbol used in the prompt (e.g. 'BTC').
+        priority:     True for user-triggered clicks; False for background crawler.
+
+    Returns:
+        Normalised sentiment dict (sentimentScore, sentimentLabel,
+        confidence, keywords, reasoning).
+
+    Raises:
+        httpx.HTTPStatusError: On persistent API errors.
+        ValueError:            If the LLM response cannot be parsed as JSON.
     """
     from backend.app.core.config import settings
 
-    # Pre-clean text to minimise prompt footprint and normalise cache keys
+    prompt = (
+        f"Analyze the financial market sentiment for asset '{asset_symbol}'.\n"
+        f"Article title: {title}\n"
+        f"Article summary: {summary}\n\n"
+        f"Return ONLY a JSON object with these exact keys:\n"
+        f'{{"sentimentScore": <float -1.0 to 1.0>, '
+        f'"sentimentLabel": <"Bullish"|"Bearish"|"Neutral">, '
+        f'"confidence": <float 0.0 to 1.0>, '
+        f'"keywords": <list of 3-5 strings>, '
+        f'"reasoning": <one concise professional sentence>}}'
+    )
+
+    payload: Dict[str, Any] = {
+        "model": settings.LLM_MODEL,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You are a professional financial sentiment analyst. "
+                    "Respond ONLY with a valid JSON object. No markdown, no preamble."
+                ),
+            },
+            {"role": "user", "content": prompt},
+        ],
+        "response_format": {"type": "json_object"},
+        "temperature": 0.1,
+        "max_tokens": 1024,
+    }
+
+    headers: Dict[str, str] = {}
+    if settings.LLM_API_KEY:
+        headers["Authorization"] = f"Bearer {settings.LLM_API_KEY}"
+
+    api_url = str(settings.LLM_API_URL).rstrip("/")
+    client = get_llm_client()
+
+    resp = await client.post(
+        f"{api_url}/chat/completions",
+        json=payload,
+        headers=headers,
+    )
+
+    # Retry once on 429 with backoff — but only for priority (user-click) calls.
+    # Background calls raise immediately so the circuit breaker handles fallback
+    # without spending a second API request on the same article.
+    if resp.status_code == 429 and priority:
+        logger.warning(
+            "openrouter_429_retry: asset=%s sleeping=10s",
+            asset_symbol,
+        )
+        await asyncio.sleep(10.0)
+        resp = await client.post(
+            f"{api_url}/chat/completions",
+            json=payload,
+            headers=headers,
+        )
+
+    resp.raise_for_status()
+    data = resp.json()
+    content = str(data["choices"][0]["message"]["content"])
+    result = _parse_llm_json(content)
+
+    logger.info(
+        "openrouter_success: asset=%s label=%s score=%.2f",
+        asset_symbol,
+        result["sentimentLabel"],
+        result["sentimentScore"],
+    )
+    return result
+
+
+async def analyze_article_sentiment(
+    title: str,
+    summary: str,
+    asset_symbol: str,
+    bypass_breaker: bool = False,
+) -> SentimentResult:
+    """
+    Main entry point for article sentiment evaluation.
+
+    Routing logic:
+      1. Cache hit (and not a manual user click) → return cached result immediately.
+      2. No LLM configured → local VADER fallback.
+      3. bypass_breaker=True (user manual click) → call OpenRouter directly,
+         bypassing both the cache check and the background rate limiter.
+      4. Background call → check token-bucket rate limiter first:
+           - Quota available → call OpenRouter via Circuit Breaker.
+           - Quota exhausted → VADER fallback immediately (preserve budget for clicks).
+
+    On 429 from OpenRouter:
+      - `_call_openrouter` retries once with 10s backoff.
+      - If the retry also 429s, httpx.HTTPStatusError is raised, caught by the
+        Circuit Breaker (background) or propagated to the endpoint (user click).
+
+    Args:
+        title:          Article headline.
+        summary:        Article summary or body excerpt.
+        asset_symbol:   Ticker symbol (e.g. 'BTC') for logging and prompt context.
+        bypass_breaker: True for user-triggered manual clicks (highest priority).
+
+    Returns:
+        Dict with keys: sentimentScore, sentimentLabel, confidence,
+        keywords, reasoning, is_fallback.
+    """
+    from backend.app.core.config import settings
+
     cleaned_title = clean_text(title)
     cleaned_summary = clean_text(summary)
-
-    # Cache hit → bypass breaker entirely (no state change from cached data)
     cache_key = f"{asset_symbol}:{cleaned_title}:{cleaned_summary}"
-    cached_result = await llm_cache.get(cache_key)
-    if cached_result is not None:
-        logger.info("sentiment_local_cache_hit: asset=%s", asset_symbol)
-        return cached_result
 
-    # 1. No remote LLM configured -> direct local VADER fallback
+    # ── 1. Cache hit (background callers only) ────────────────────────────────
+    if not bypass_breaker:
+        cached = await llm_cache.get(cache_key)
+        if cached is not None:
+            logger.info("sentiment_cache_hit: asset=%s", asset_symbol)
+            return cached
+
+    # ── 2. No remote LLM configured → local VADER ─────────────────────────────
     api_url = settings.LLM_API_URL
     if not api_url:
         local_res = analyze_sentiment_local(cleaned_title, cleaned_summary)
         local_res["is_fallback"] = True
-        await llm_cache.set(cache_key, local_res)
-        return local_res
+        res = cast(SentimentResult, local_res)
+        await llm_cache.set(cache_key, res)
+        return res
 
-    # 2. Remote LLM configured -> execute via circuit breaker FSM
-    async def _primary() -> Dict[str, Any]:
-        """Attempt calling remote LLM API."""
-        client = get_llm_client()
-        prompt = (
-            f"Analyze the sentiment of this article for the asset '{asset_symbol}'.\n"
-            f"Title: {title}\n"
-            f"Summary: {summary}\n\n"
-            f"You must return a JSON object matching this schema:\n"
-            f'{{"sentimentScore": float between -1.0 and 1.0, "sentimentLabel": "Bullish" | "Bearish" | "Neutral", "confidence": float between 0.0 and 1.0, "keywords": list of strings, "reasoning": "Chain-of-thought analysis"}}\n'
+    # ── 3. User manual click (bypass_breaker=True) → priority direct call ─────
+    if bypass_breaker:
+        result = await _call_openrouter(title, summary, asset_symbol, priority=True)
+        result["is_fallback"] = False
+        await llm_cache.set(cache_key, result)
+        return result
+
+    # ── 4. Background call → check rate-limit bucket first ────────────────────
+    bucket_ok = await _background_rate_limit_ok()
+    if not bucket_ok:
+        logger.info(
+            "sentiment_rate_limit_fallback: asset=%s bucket_full=True",
+            asset_symbol,
         )
-        payload = {
-            "model": settings.LLM_MODEL,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": "You are a professional financial sentiment analyzer. Respond ONLY in valid JSON matching the schema.",
-                },
-                {"role": "user", "content": prompt},
-            ],
-            "response_format": {"type": "json_object"},
-            "temperature": 0.1,
-        }
-        resp = await client.post(
-            f"{api_url.rstrip('/')}/chat/completions",
-            json=payload,
-            timeout=15.0,
-        )
-        resp.raise_for_status()
-        resp_data = resp.json()
-        content = str(resp_data["choices"][0]["message"]["content"])
+        local_res = analyze_sentiment_local(cleaned_title, cleaned_summary)
+        local_res["is_fallback"] = True
+        res = cast(SentimentResult, local_res)
+        await llm_cache.set(cache_key, res)
+        return res
 
-        import json
+    # ── 5. Background call with circuit breaker protection ────────────────────
+    async def _primary() -> SentimentResult:
+        """Attempt remote LLM call for background crawler."""
+        res = await _call_openrouter(title, summary, asset_symbol)
+        res["is_fallback"] = False
+        return res
 
-        parsed = json.loads(content)
-        sentiment_score = float(parsed.get("sentimentScore", 0.0))
-        sentiment_label = str(parsed.get("sentimentLabel", "Neutral"))
-        confidence = float(parsed.get("confidence", 0.8))
-        keywords = list(parsed.get("keywords", []))
-        reasoning = str(parsed.get("reasoning", "Analyzed by AI LLaMA model."))
-
-        sentiment_score = max(-1.0, min(1.0, sentiment_score))
-        if sentiment_label not in ["Bullish", "Bearish", "Neutral"]:
-            sentiment_label = "Neutral"
-        confidence = max(0.0, min(1.0, confidence))
-
-        return {
-            "sentimentScore": sentiment_score,
-            "sentimentLabel": sentiment_label,
-            "confidence": confidence,
-            "keywords": keywords,
-            "reasoning": reasoning,
-            "is_fallback": False,
-        }
-
-    async def _fallback() -> Dict[str, Any]:
-        """Local VADER fallback when remote LLM fails/times out."""
+    async def _fallback() -> SentimentResult:
+        """Local VADER fallback when circuit breaker is open or primary fails."""
         logger.warning(
             "sentiment_llm_fallback_triggered: asset=%s breaker_state=%s",
             asset_symbol,
@@ -330,12 +546,8 @@ async def analyze_article_sentiment(
         )
         local_res = analyze_sentiment_local(cleaned_title, cleaned_summary)
         local_res["is_fallback"] = True
-        return local_res
+        return cast(SentimentResult, local_res)
 
-    result = await _sentiment_breaker.call(
-        primary=_primary,
-        fallback=_fallback,
-    )
-
+    result = await _sentiment_breaker.call(primary=_primary, fallback=_fallback)
     await llm_cache.set(cache_key, result)
     return result

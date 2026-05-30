@@ -150,6 +150,114 @@ async def get_asset_sentiment(
     return [SentimentArticle.model_validate(art) for art in articles]
 
 
+@router.post(
+    "/articles/{article_id}/analyze",
+    response_model=SentimentArticle,
+    status_code=status.HTTP_200_OK,
+    summary="Trigger live AI sentiment analysis for an article",
+)
+@limiter.limit("10/minute")
+async def analyze_article_sentiment_endpoint(
+    request: Request,
+    article_id: str,
+) -> SentimentArticle:
+    """
+    Triggers live AI sentiment analysis of an existing article.
+    Queries the remote LLM bypassing the local cache to get a fresh response.
+    Saves the updated sentiment to MongoDB and updates the asset metrics.
+
+    Args:
+        request: The FastAPI Request object (needed for rate limiter).
+        article_id: The ID of the article to analyze.
+
+    Returns:
+        The updated SentimentArticle schema.
+    """
+    article = await articles_collection.find_one({"id": article_id})
+    if not article:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Article with ID '{article_id}' not found.",
+        )
+
+    import httpx
+    from fastapi.responses import JSONResponse
+    from backend.app.services.llm import (
+        llm_cache,
+        analyze_article_sentiment,
+        clean_text,
+    )
+
+    cleaned_title = clean_text(article["title"])
+    cleaned_summary = clean_text(article["summary"])
+    cache_key = f"{article['asset_id']}:{cleaned_title}:{cleaned_summary}"
+
+    # Remove from local in-memory cache to force a fresh LLM call
+    async with llm_cache.lock:
+        llm_cache.cache.pop(cache_key, None)
+
+    # Perform analysis with robust HTTP error handling
+    try:
+        sentiment_data = await analyze_article_sentiment(
+            title=article["title"],
+            summary=article["summary"],
+            asset_symbol=article["asset_id"],
+            bypass_breaker=True,
+        )
+    except httpx.HTTPStatusError as exc:
+        status_code = exc.response.status_code
+        if status_code == 429:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="OpenRouter rate limit exceeded. Please wait a minute and try again.",
+            )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"OpenRouter API returned error {status_code}: {exc.response.text}",
+        )
+    except (httpx.TimeoutException, httpx.RequestError):
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="OpenRouter API request timed out or failed to connect.",
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Sentiment analysis processing failed: {str(exc)}",
+        )
+
+    # Update MongoDB article document
+    update_doc = {
+        "sentimentScore": sentiment_data["sentimentScore"],
+        "sentimentLabel": sentiment_data["sentimentLabel"],
+        "confidence": sentiment_data["confidence"],
+        "keywords": sentiment_data["keywords"],
+        "llmReasoning": sentiment_data["reasoning"],
+        "is_fallback": sentiment_data.get("is_fallback", False),
+    }
+
+    await articles_collection.update_one(
+        {"id": article_id},
+        {"$set": update_doc},
+    )
+
+    # Reactively apply sentiment shift to asset metrics
+    from backend.app.services.parser import _apply_sentiment_to_asset
+
+    await _apply_sentiment_to_asset(
+        article["asset_id"], sentiment_data["sentimentScore"]
+    )
+
+    # Fetch and return the updated article
+    updated = await articles_collection.find_one({"id": article_id})
+    if not updated:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Article could not be reloaded after analysis.",
+        )
+    return SentimentArticle.model_validate(updated)
+
+
 @router.get(
     "/assets/{asset_id}/historical",
     response_model=List[HistoricalDataPoint],

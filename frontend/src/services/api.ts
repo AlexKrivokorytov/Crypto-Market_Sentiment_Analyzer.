@@ -89,8 +89,13 @@ class ApiClient {
           if (body.detail) {
             if (Array.isArray(body.detail)) {
               // Handle FastAPI Pydantic v2 validation error array [{loc, msg, type}]
-              detail = body.detail.map((err: any) => {
-                const field = err.loc ? err.loc.filter((l: any) => l !== 'body').join('.') : ''
+              interface PydanticValidationError {
+                loc: (string | number)[]
+                msg: string
+                type: string
+              }
+              detail = body.detail.map((err: PydanticValidationError) => {
+                const field = err.loc ? err.loc.filter((l) => l !== 'body').join('.') : ''
                 return field ? `${field}: ${err.msg}` : err.msg
               }).join('; ')
             } else {
@@ -154,6 +159,12 @@ export const marketApi = {
 
   getConfig(): Promise<{ llm_configured: boolean; llm_model: string }> {
     return apiClient.request<{ llm_configured: boolean; llm_model: string }>('/config')
+  },
+
+  analyzeArticle(articleId: string): Promise<SentimentArticle> {
+    return apiClient.request<SentimentArticle>(`/articles/${articleId}/analyze`, {
+      method: 'POST',
+    })
   },
 }
 

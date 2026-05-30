@@ -34,7 +34,7 @@ services:
     container_name: sentiment_mongodb
     # Port exposed on loopback only — not reachable from other Docker networks
     ports:
-      - "127.0.0.1:27017:27017"
+      - "127.0.0.1:27018:27017"
     environment:
       # Credentials for the local container's root user.
       # Must match MONGODB_URL in backend/.env (authSource=admin).

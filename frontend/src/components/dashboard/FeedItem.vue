@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed, watch } from 'vue'
 import type { SentimentArticle } from '@/types/market'
 import { MessageSquare, ArrowRight, ChevronDown, ChevronUp, Cpu, Calendar, ShieldCheck, Sparkles, Loader2 } from '@lucide/vue'
 
 const props = defineProps<{
   article: SentimentArticle
+  modelName?: string
 }>()
 
 const isExpanded = ref(false)
@@ -14,18 +15,45 @@ const emit = defineEmits<{
 }>()
 
 const isAiRequestPending = ref(false)
+const aiError = ref<string | null>(null)
 
 const triggerAiAnalysis = () => {
   if (isAiRequestPending.value) return
   isAiRequestPending.value = true
+  aiError.value = null
   emit('requestAiAnalysis', props.article.id)
   
-  // Simulate active spinner loader for 2 seconds to wow the user
+  // Safety timeout: auto-reset loader after 35s (covers 10s retry backoff + API call time)
   setTimeout(() => {
     isAiRequestPending.value = false
-  }, 2000)
+  }, 35000)
 }
 
+// Reset spinner when the article is successfully analyzed by LLM
+watch(() => props.article.is_fallback, (newFallback) => {
+  if (!newFallback) {
+    isAiRequestPending.value = false
+    aiError.value = null
+  }
+})
+
+// Exposed so LiveFeed.vue can reset the spinner and show an error on 429
+const setAnalysisError = (message: string) => {
+  isAiRequestPending.value = false
+  aiError.value = message
+}
+
+defineExpose({ setAnalysisError })
+
+const displayModelName = computed(() => {
+  if (!props.modelName) return 'AI Analysis (LLM)'
+  const modelPart = props.modelName.split('/').pop() || 'LLM'
+  const cleanName = (modelPart.split(':')[0] || 'LLM')
+    .replace(/-it|-preview|-instruct/g, '')
+    .replace(/-/g, ' ')
+    .toUpperCase()
+  return `AI Analysis (${cleanName})`
+})
 
 const formatTime = (isoString: string) => {
   const date = new Date(isoString)
@@ -66,11 +94,11 @@ const formatDate = (isoString: string) => {
           class="px-2 py-0.5 rounded border text-[9px] uppercase font-extrabold tracking-wider"
           :class="[
             article.is_fallback 
-              ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' 
+              ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' 
               : 'bg-violet-500/10 text-violet-400 border-violet-500/20'
           ]"
         >
-          {{ article.is_fallback ? 'Local Algorithm (VADER)' : 'AI Analysis (LLaMA)' }}
+          {{ article.is_fallback ? 'Local Algorithm (VADER)' : displayModelName }}
         </span>
         <span
           class="px-2 py-0.5 rounded border text-[9px] uppercase font-extrabold tracking-wider"
@@ -132,6 +160,15 @@ const formatDate = (isoString: string) => {
           <component :is="isAiRequestPending ? Loader2 : Sparkles" class="h-3.5 w-3.5" :class="[isAiRequestPending ? 'animate-spin' : '']" />
           {{ isAiRequestPending ? 'Analyzing...' : 'Request Live AI Sentiment' }}
         </button>
+      </div>
+
+      <!-- Rate-limit inline warning -->
+      <div
+        v-if="aiError"
+        class="absolute bottom-14 left-5 right-5 flex items-center gap-2 px-3 py-2 rounded-xl bg-rose-500/10 border border-rose-500/20 text-[10px] text-rose-400 font-semibold z-10 animate-fade-in"
+      >
+        <span class="text-rose-400">⚠</span>
+        {{ aiError }}
       </div>
       
       <a

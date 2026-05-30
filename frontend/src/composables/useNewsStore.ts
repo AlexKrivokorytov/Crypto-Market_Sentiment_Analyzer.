@@ -67,6 +67,22 @@ export const useNewsStore = defineStore('news', () => {
     }
   }
 
+  /**
+   * Updates an existing article in the store and local storage.
+   */
+  function updateArticle(updatedArticle: SentimentArticle): void {
+    hydrateStore()
+    const idx = articles.value.findIndex((a) => a.id === updatedArticle.id)
+    if (idx !== -1) {
+      articles.value[idx] = updatedArticle
+      try {
+        localStorage.setItem(NEWS_CACHE_KEY, JSON.stringify(articles.value))
+      } catch (err) {
+        console.error('[NewsStore] Failed to write cache on update:', err)
+      }
+    }
+  }
+
   const latestArticles = computed(() => {
     // Return items sorted by timestamp descending
     return [...articles.value].sort(
@@ -80,5 +96,6 @@ export const useNewsStore = defineStore('news', () => {
     hydrateStore,
     setArticles,
     prependArticle,
+    updateArticle,
   }
 })

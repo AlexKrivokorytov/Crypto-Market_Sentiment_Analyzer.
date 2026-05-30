@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
-import { useSentimentArticles } from '@/composables/useMarketData'
+import { useSentimentArticles, useBackendConfig } from '@/composables/useMarketData'
 import { useNewsStore } from '@/composables/useNewsStore'
 import FeedItem from './FeedItem.vue'
 import ErrorState from '@/components/ui/ErrorState.vue'
 import { Search, Filter, Sparkles, AlertTriangle, CheckCircle2 } from '@lucide/vue'
 import type { RouteAssetId } from '@/types/market'
+import { marketApi } from '@/services/api'
+import { useQueryClient } from '@tanstack/vue-query'
+
+/** Per-item component refs keyed by article ID, used to call setAnalysisError() directly. */
+const feedItemRefs = new Map<string, InstanceType<typeof FeedItem>>()
 
 const props = defineProps<{
   /** The asset ticker ID derived from the current route parameter. */
@@ -13,6 +18,7 @@ const props = defineProps<{
 }>()
 
 const newsStore = useNewsStore()
+const queryClient = useQueryClient()
 
 // Trigger store hydration immediately on mount
 onMounted(() => {
@@ -20,6 +26,7 @@ onMounted(() => {
 })
 
 const { data: serverArticles, isLoading, isError, refetch } = useSentimentArticles(computed(() => props.assetId))
+const { data: config } = useBackendConfig()
 
 // Reactively watch for incoming API payloads and synchronize with the offline Pinia cache
 watch(serverArticles, (newArticles) => {
@@ -27,6 +34,31 @@ watch(serverArticles, (newArticles) => {
     newsStore.setArticles(newArticles)
   }
 }, { immediate: true })
+
+const handleRequestAiAnalysis = async (articleId: string) => {
+  try {
+    const updatedArticle = await marketApi.analyzeArticle(articleId)
+    if (updatedArticle) {
+      newsStore.updateArticle(updatedArticle)
+      queryClient.invalidateQueries({ queryKey: ['articles', props.assetId] })
+      queryClient.invalidateQueries({ queryKey: ['assets'] })
+    }
+  } catch (err) {
+    // Look up the FeedItem by article ID so we can call setAnalysisError() on it
+    const itemRef = feedItemRefs.get(articleId)
+
+    if (err instanceof Error && err.message.includes('status=429')) {
+      const msg = 'Rate limit reached — OpenRouter is busy. Wait ~30s and try again.'
+      itemRef?.setAnalysisError(msg)
+    } else if (err instanceof Error && err.message.includes('status=504')) {
+      const msg = '⚠ AI service took too long to respond. Try again later.'
+      itemRef?.setAnalysisError(msg)
+    } else {
+      itemRef?.setAnalysisError('Analysis failed. Please try again.')
+    }
+    console.error('[LiveFeed] Failed to run live AI analysis:', err)
+  }
+}
 
 const searchQuery = ref('')
 const selectedFilter = ref<'All' | 'Bullish' | 'Neutral' | 'Bearish'>('All')
@@ -192,7 +224,10 @@ const showEmptyState = computed(() => !isLoading.value && filteredArticles.value
         <FeedItem
           v-for="article in filteredArticles"
           :key="article.id"
+          :ref="(el) => { if (el) feedItemRefs.set(article.id, el as InstanceType<typeof FeedItem>) }"
           :article="article"
+          :model-name="config?.llm_model"
+          @request-ai-analysis="handleRequestAiAnalysis"
         />
       </TransitionGroup>
     </div>

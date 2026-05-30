@@ -88,17 +88,12 @@ async def test_process_unified_crypto_feed_multi_tag(
     # 1. Fetch RSS was invoked once
     mock_fetch.assert_called_once()
 
-    # 2. Sentiments parsed and analyzed separately for both BTC and ETH contexts
-    assert mock_analyze.call_count == 2
-    mock_analyze.assert_any_call(
+    # 2. Sentiments parsed and analyzed once (for the primary asset context, BTC) and reused for ETH
+    assert mock_analyze.call_count == 1
+    mock_analyze.assert_called_once_with(
         title="Bitcoin surges but Ethereum lags behind - Bloomberg",
         summary="General details outlining Bitcoin surge while Ethereum remains consolidation range.",
         asset_symbol="BTC",
-    )
-    mock_analyze.assert_any_call(
-        title="Bitcoin surges but Ethereum lags behind - Bloomberg",
-        summary="General details outlining Bitcoin surge while Ethereum remains consolidation range.",
-        asset_symbol="ETH",
     )
 
     # 3. Two articles successfully persisted with custom idempotent composite primary keys

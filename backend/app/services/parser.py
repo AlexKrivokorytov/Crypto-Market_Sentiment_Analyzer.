@@ -12,7 +12,7 @@ import re
 import time
 import urllib.parse
 import xml.etree.ElementTree as ET
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 import httpx
 
 from backend.app.core.database import articles_collection, assets_collection
@@ -41,9 +41,13 @@ ASSET_REGEX: Dict[str, re.Pattern[str]] = {
 }
 
 # Maximum articles processed per sweep to cap blocking time per loop iteration.
-# Adjust upward if real-time latency allows, or downward on Render free-tier constraints.
 MAX_ARTICLES_PER_SWEEP: int = 15
 MAX_AAPL_ARTICLES_PER_SWEEP: int = 3
+
+# Maximum remote LLM calls allowed per unified crypto sweep.
+# The remaining articles fall back to local VADER to preserve the
+# OpenRouter free-tier budget (20 RPM) for user manual clicks.
+MAX_LLM_CALLS_PER_SWEEP: int = 3
 
 
 def _md5_hash(text: str) -> str:
@@ -276,6 +280,9 @@ async def process_unified_crypto_feed() -> None:
 
     parsed_items = parse_rss_xml(xml_content)
     new_articles_count = 0
+    # Track how many remote LLM calls this sweep has already issued.
+    # Stays within MAX_LLM_CALLS_PER_SWEEP to preserve free-tier budget.
+    llm_calls_this_sweep: int = 0
 
     # Limit to top MAX_ARTICLES_PER_SWEEP parsed items to cap blocking time per iteration
     for item in parsed_items[:MAX_ARTICLES_PER_SWEEP]:
@@ -299,20 +306,59 @@ async def process_unified_crypto_feed() -> None:
 
         url_hash = _md5_hash(item["url"])
 
-        # Loop through matches and process separately for each asset
+        # Compute sentiment once per article URL — reuse the result for every
+        # matched asset so that a 5-asset article only consumes 1 LLM call.
+        # Force VADER (bypass_breaker=False + bucket check inside llm.py) once
+        # the per-sweep LLM cap is reached.
+        force_local = llm_calls_this_sweep >= MAX_LLM_CALLS_PER_SWEEP
+
+        # Use first matched asset's symbol for the LLM prompt context.
+        primary_asset = matched_assets[0]
+        primary_id = f"art_{primary_asset}_{url_hash}"
+        primary_existing = await articles_collection.find_one({"id": primary_id})
+
+        if primary_existing:
+            # Article already processed — reuse stored sentiment values.
+            shared_sentiment: Dict[str, Any] = {
+                "sentimentScore": primary_existing["sentimentScore"],
+                "sentimentLabel": primary_existing["sentimentLabel"],
+                "confidence": primary_existing["confidence"],
+                "keywords": primary_existing["keywords"],
+                "reasoning": primary_existing.get("llmReasoning", ""),
+                "is_fallback": primary_existing.get("is_fallback", True),
+            }
+        else:
+            if force_local:
+                from backend.app.services.sentiment_engine import (
+                    analyze_sentiment_local,
+                )
+                from backend.app.services.llm import clean_text
+
+                local_res = analyze_sentiment_local(
+                    clean_text(item["title"]), clean_text(item["summary"])
+                )
+                local_res["is_fallback"] = True
+                shared_sentiment = local_res
+            else:
+                shared_sentiment = cast(
+                    Dict[str, Any],
+                    await analyze_article_sentiment(
+                        title=item["title"],
+                        summary=item["summary"],
+                        asset_symbol=primary_asset,
+                    ),
+                )
+                if not shared_sentiment.get("is_fallback", True):
+                    llm_calls_this_sweep += 1
+
+        # Loop through matches and persist separately for each asset
         for asset_id in matched_assets:
             # Composite primary key: ID is guaranteed unique per asset-article pairing
-            # Perfectly avoids MongoDB DuplicateKeyErrors on multi-asset mentions
             article_id = f"art_{asset_id}_{url_hash}"
 
             existing = await articles_collection.find_one({"id": article_id})
             if existing:
                 continue
-
-            # Run deterministic sentiment evaluation
-            sentiment_data = await analyze_article_sentiment(
-                title=item["title"], summary=item["summary"], asset_symbol=asset_id
-            )
 
             try:
                 ts_dt = datetime.datetime.fromisoformat(item["timestamp"])
@@ -328,19 +374,21 @@ async def process_unified_crypto_feed() -> None:
                 "title": item["title"],
                 "url": item["url"],
                 "summary": item["summary"],
-                "sentimentScore": sentiment_data["sentimentScore"],
-                "sentimentLabel": sentiment_data["sentimentLabel"],
-                "confidence": sentiment_data["confidence"],
-                "keywords": sentiment_data["keywords"],
-                "llmReasoning": sentiment_data["reasoning"],
-                "is_fallback": sentiment_data.get("is_fallback", False),
+                "sentimentScore": shared_sentiment["sentimentScore"],
+                "sentimentLabel": shared_sentiment["sentimentLabel"],
+                "confidence": shared_sentiment["confidence"],
+                "keywords": shared_sentiment["keywords"],
+                "llmReasoning": shared_sentiment.get("reasoning", ""),
+                "is_fallback": shared_sentiment.get("is_fallback", False),
             }
 
             await articles_collection.insert_one(article_doc)
             new_articles_count += 1
 
             # Adjust prices and sentiment reactively
-            await _apply_sentiment_to_asset(asset_id, sentiment_data["sentimentScore"])
+            await _apply_sentiment_to_asset(
+                asset_id, shared_sentiment["sentimentScore"]
+            )
 
     if new_articles_count > 0:
         logger.info(
@@ -428,7 +476,7 @@ async def rss_parser_loop() -> None:
             await process_aapl_feed()
 
             logger.info("rss_sweep_complete")
-            await asyncio.sleep(60.0)
+            await asyncio.sleep(120.0)
         except asyncio.CancelledError:
             break
         except Exception as exc:

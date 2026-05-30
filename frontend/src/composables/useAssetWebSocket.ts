@@ -31,15 +31,15 @@ export function useAssetWebSocket(assetId: Ref<string>) {
   /**
    * Processes the throttled real-time tick message.
    */
-  function handleMessage(payload: any): void {
+  function handleMessage(payload: AssetUpdateMessage | Record<string, unknown>): void {
     // If a connection failure toast is visible, dismiss it now that we are receiving messages
     if (activeToastId) {
       toast.dismiss(activeToastId)
       activeToastId = null
     }
 
-    if (payload?.type === 'asset_update' && payload.asset) {
-      const asset: AssetMetrics = payload.asset
+    if (payload?.type === 'asset_update' && 'asset' in payload && payload.asset) {
+      const asset: AssetMetrics = payload.asset as AssetMetrics
 
       // 1. Update single asset cached record
       queryClient.setQueryData(['asset', asset.id], asset)

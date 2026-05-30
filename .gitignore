@@ -9,6 +9,8 @@ __pycache__/
 
 # AI Agents and helpers
 .agents/
+skills-lock.json
+.antigravity/
 
 # Python tools and caches
 .mypy_cache/

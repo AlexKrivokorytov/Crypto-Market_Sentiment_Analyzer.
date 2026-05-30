@@ -37,16 +37,16 @@ async def test_llm_cache_set_get_and_eviction() -> None:
     cache = LLMAnalysisCache(maxsize=3, ttl_seconds=10)
 
     # Test set and get
-    await cache.set("key1", {"score": 0.8})
-    await cache.set("key2", {"score": -0.5})
-    await cache.set("key3", {"score": 0.0})
+    await cache.set("key1", {"sentimentScore": 0.8})
+    await cache.set("key2", {"sentimentScore": -0.5})
+    await cache.set("key3", {"sentimentScore": 0.0})
 
     res1 = await cache.get("key1")
     assert res1 is not None
-    assert res1["score"] == 0.8
+    assert res1["sentimentScore"] == 0.8
 
     # Test Eviction: Adding key4 should evict the oldest key (key1)
-    await cache.set("key4", {"score": 0.95})
+    await cache.set("key4", {"sentimentScore": 0.95})
 
     evicted = await cache.get("key1")
     assert evicted is None  # Evicted!
@@ -65,7 +65,7 @@ async def test_llm_cache_ttl_expiration() -> None:
     # TTL = 0 seconds (instantly expires)
     cache = LLMAnalysisCache(maxsize=5, ttl_seconds=0)
 
-    await cache.set("key1", {"score": 0.5})
+    await cache.set("key1", {"sentimentScore": 0.5})
     expired = await cache.get("key1")
     assert expired is None  # Instantly expired!
 

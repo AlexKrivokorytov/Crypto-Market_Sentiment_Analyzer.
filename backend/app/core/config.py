@@ -29,6 +29,7 @@ class Settings(BaseSettings):
 
     LLM_API_URL: Optional[str] = None
     LLM_MODEL: str = "local-model"
+    LLM_API_KEY: Optional[str] = None
 
     JWT_SECRET_KEY: str = "CHANGE_ME_IN_PRODUCTION_USE_ENV_VAR"
     JWT_ALGORITHM: str = "HS256"
