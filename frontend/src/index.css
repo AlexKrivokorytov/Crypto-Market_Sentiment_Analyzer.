@@ -1,0 +1,395 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   DESIGN SYSTEM — CSS Custom Properties
+   Sprint 5: Gold (#F59E0B) + Violet (#8B5CF6) Fintech/Crypto palette
+   Typography: Space Grotesk (display) + JetBrains Mono (data) + Plus Jakarta Sans (body)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@layer base {
+  :root {
+    /* ── shadcn/ui semantic tokens ──────────────────────────────────────── */
+    --background: 224 71% 4%;
+    --foreground: 213 31% 91%;
+
+    --muted: 223 47% 11%;
+    --muted-foreground: 215.4 16.3% 56.9%;
+
+    --popover: 224 71% 4%;
+    --popover-foreground: 213 31% 91%;
+
+    --card: 222.2 47.4% 6.2%;
+    --card-foreground: 213 31% 91%;
+
+    --border: 223 47% 12%;
+    --input: 223 47% 12%;
+
+    --primary: 244.5 74.3% 60.6%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 222.2 47.4% 11.2%;
+    --secondary-foreground: 210 40% 98%;
+
+    --accent: 216 34% 17%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+
+    --ring: 244.5 74.3% 60.6%;
+    --radius: 0.75rem;
+
+    /* ── Sprint 5 Brand Tokens ──────────────────────────────────────────── */
+    --gold:            #f59e0b;
+    --gold-soft:       rgba(245, 158, 11, 0.12);
+    --gold-border:     rgba(245, 158, 11, 0.25);
+    --gold-glow:       rgba(245, 158, 11, 0.18);
+
+    --violet-cta:      #8b5cf6;
+    --violet-soft:     rgba(139, 92, 246, 0.12);
+    --violet-border:   rgba(139, 92, 246, 0.25);
+    --violet-glow:     rgba(139, 92, 246, 0.18);
+
+    /* ── Asset Brand Colours (used via JS getAssetBrandColor) ────────────── */
+    --color-btc:  #F7931A;
+    --color-eth:  #627EEA;
+    --color-ton:  #0098EA;
+    --color-sol:  #9945FF;
+    --color-xrp:  #00AAE4;
+    --color-ada:  #3CC8C8;
+    --color-aapl: #A2AAAD;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BASE STYLES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    /* Body: Plus Jakarta Sans (unchanged from Sprint 4) */
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+                 Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+    /* Prevent layout shift from subpixel rendering */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Tabular numbers everywhere prices appear — prevents layout shift on ticks */
+  .font-mono,
+  .price-mono,
+  .ticker-mono {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COMPONENT UTILITIES — Glass System
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Frosted-glass background panel — dark overlay with backdrop blur */
+.glass-panel {
+  background: rgba(8, 10, 22, 0.78);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+/* Interactive glass card — upgrades with gold border glow on hover */
+.glass-card {
+  background: rgba(13, 16, 32, 0.50);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.045);
+  transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease,
+              transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-card:hover {
+  background: rgba(13, 16, 32, 0.70);
+  border-color: var(--active-brand-color, var(--gold-border));
+  box-shadow: 0 0 20px -4px var(--active-brand-color-glow, var(--gold-glow)), 0 12px 30px -10px rgba(0, 0, 0, 0.55);
+  transform: translateY(-2px);
+  z-index: 10;
+}
+
+/* Bento grid card — no hover transform (used in grid, not interactive standalone) */
+.bento-card {
+  position: relative;
+  z-index: 1;
+  background: rgba(13, 16, 32, 0.50);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: 1.25rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, z-index 0s;
+}
+
+.bento-card:hover {
+  z-index: 10;
+  border-color: rgba(255, 255, 255, 0.10);
+  box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.45);
+}
+
+/* ─── Gold-tinted glass card variant ────────────────────────────────────── */
+.glass-card-gold {
+  background: linear-gradient(
+    135deg,
+    rgba(245, 158, 11, 0.08) 0%,
+    rgba(13, 16, 32, 0.55)   100%
+  );
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--gold-border);
+  box-shadow: 0 0 16px -4px var(--gold-glow);
+  transition: box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+/* ─── Violet-tinted glass card variant ──────────────────────────────────── */
+.glass-card-violet {
+  background: linear-gradient(
+    135deg,
+    rgba(139, 92, 246, 0.08) 0%,
+    rgba(13, 16, 32, 0.55)   100%
+  );
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--violet-border);
+  box-shadow: 0 0 16px -4px var(--violet-glow);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TYPOGRAPHY UTILITIES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Space Grotesk display headings — for section titles and KPI values */
+.font-display {
+  font-family: 'Space Grotesk', 'Plus Jakarta Sans', -apple-system, sans-serif;
+}
+
+/* JetBrains Mono — for all price, score, and data values */
+.price-mono {
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Gradient text helpers ──────────────────────────────────────────────── */
+.text-gradient-gold {
+  background: linear-gradient(90deg, #f59e0b 0%, #fbbf24 50%, #fcd34d 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-violet {
+  background: linear-gradient(90deg, #8b5cf6 0%, #a78bfa 50%, #c4b5fd 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.text-gradient-crypto {
+  background: linear-gradient(90deg, #fff 0%, #e2e8f0 40%, #818cf8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SENTIMENT GLOWS + BADGES
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.sentiment-bg-bullish {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.10) 0%, rgba(16, 185, 129, 0.02) 100%);
+}
+
+.sentiment-bg-bearish {
+  background: linear-gradient(135deg, rgba(244, 63, 94, 0.10) 0%, rgba(244, 63, 94, 0.02) 100%);
+}
+
+.text-glow-bullish {
+  text-shadow: 0 0 12px rgba(16, 185, 129, 0.45);
+}
+
+.text-glow-bearish {
+  text-shadow: 0 0 12px rgba(244, 63, 94, 0.45);
+}
+
+.text-glow-gold {
+  text-shadow: 0 0 14px rgba(245, 158, 11, 0.50);
+}
+
+/* Sentiment label badges with correct WCAG contrast */
+.badge-bullish {
+  @apply bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 font-bold;
+}
+
+.badge-bearish {
+  @apply bg-rose-500/10 text-rose-400 border border-rose-500/25 font-bold;
+}
+
+.badge-neutral {
+  @apply bg-slate-700/50 text-slate-400 border border-slate-600/30 font-bold;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SHIMMER / SKELETON LOADING
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.00) 0%,
+    rgba(255, 255, 255, 0.04) 50%,
+    rgba(255, 255, 255, 0.00) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TICKER STRIP — CryptoTickerBar
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.ticker-track {
+  /* GPU-composited layer prevents jank during live price updates */
+  will-change: transform;
+  animation: ticker-scroll 40s linear infinite;
+  /* Pause on hover per UX best practice (allows reading) */
+}
+
+.ticker-track:hover {
+  animation-play-state: paused;
+}
+
+/* Respect reduced-motion — stop marquee, show static row */
+@media (prefers-reduced-motion: reduce) {
+  .ticker-track {
+    animation: none;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CUSTOM SCROLLBARS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CHART CONTAINER
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.chart-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   AUTH / NAVIGATION UTILITIES (legacy, preserved)
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.auth-back-btn {
+  position: absolute;
+  top: 1.5rem;
+  left: 1.5rem;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 0.75rem;
+  color: #94a3b8;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-decoration: none;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.auth-back-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(99, 102, 241, 0.3);
+  color: #f8fafc;
+  transform: translateX(-3px);
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.15);
+}
+
+.auth-back-btn:active {
+  transform: translateX(0);
+}
+
+.back-icon {
+  transition: transform 0.2s ease-in-out;
+}
+
+.auth-back-btn:hover .back-icon {
+  transform: translateX(-2px);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MICRO-INTERACTIONS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Scale + lift on interactive cards — 150–300ms per UI-UX Pro Max §7 */
+.hover-scale-premium {
+  position: relative;
+  z-index: 1;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hover-scale-premium:hover {
+  z-index: 10;
+  transform: scale(1.015) translateY(-1px);
+}
+
+.hover-scale-premium:active {
+  transform: scale(0.985) translateY(0);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RESPONSIVE FLUID LAYOUT SYSTEM
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Fluid type scale (320px → 2560px viewport) */
+:root {
+  --text-base: clamp(0.875rem, 0.8rem + 0.25vw, 1rem);
+  --text-lg:   clamp(1rem, 0.9rem + 0.4vw, 1.25rem);
+}
+
+/* Dashboard grid: auto-fit from 1 col (mobile) → 3 cols (4K) */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  gap: clamp(0.75rem, 2vw, 1.5rem);
+}
