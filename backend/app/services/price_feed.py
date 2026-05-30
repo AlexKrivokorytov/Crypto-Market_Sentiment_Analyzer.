@@ -31,6 +31,16 @@ COINGECKO_IDS: Dict[str, str] = {
     "TON": "the-open-network",
     "XRP": "ripple",
     "ADA": "cardano",
+    "DOGE": "dogecoin",
+    "DOT": "polkadot",
+    "LINK": "chainlink",
+    "AVAX": "avalanche-2",
+    "MATIC": "matic-network",
+    "SHIB": "shiba-inu",
+    "LTC": "litecoin",
+    "UNI": "uniswap",
+    "NEAR": "near",
+    "ATOM": "cosmos",
 }
 
 _COINGECKO_BASE = "https://api.coingecko.com/api/v3"
