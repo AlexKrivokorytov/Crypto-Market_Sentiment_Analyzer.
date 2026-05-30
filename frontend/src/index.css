@@ -105,12 +105,14 @@
 
 /* Interactive glass card — upgrades with gold border glow on hover */
 .glass-card {
+  position: relative;
+  z-index: 1;
   background: rgba(13, 16, 32, 0.50);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.045);
   transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease,
-              transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+              transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), z-index 0.25s step-end;
 }
 
 .glass-card:hover {
@@ -119,6 +121,8 @@
   box-shadow: 0 0 20px -4px var(--active-brand-color-glow, var(--gold-glow)), 0 12px 30px -10px rgba(0, 0, 0, 0.55);
   transform: translateY(-2px);
   z-index: 10;
+  transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease,
+              transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), z-index 0s step-start;
 }
 
 /* Bento grid card — no hover transform (used in grid, not interactive standalone) */
@@ -130,13 +134,14 @@
   -webkit-backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.055);
   border-radius: 1.25rem;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, z-index 0s;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, z-index 0.2s step-end;
 }
 
 .bento-card:hover {
   z-index: 10;
   border-color: rgba(255, 255, 255, 0.10);
   box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.45);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, z-index 0s step-start;
 }
 
 /* ─── Gold-tinted glass card variant ────────────────────────────────────── */

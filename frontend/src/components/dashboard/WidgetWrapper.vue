@@ -72,9 +72,9 @@ function handleCollapseToggle() {
 
 <template>
   <div
-    class="glass-panel rounded-3xl border border-border/40 flex flex-col transition-all duration-300 relative group overflow-hidden select-none h-full"
+    class="glass-panel rounded-3xl border border-border/40 flex flex-col transition-all duration-300 relative group select-none h-full"
     :class="[
-      collapsed ? 'h-14 sm:h-14 lg:h-14 shadow-none bg-slate-950/20' : 'shadow-xl',
+      collapsed ? 'h-14 sm:h-14 lg:h-14 shadow-none bg-slate-950/20 overflow-hidden' : 'shadow-xl',
       hasError ? 'border-rose-500/20 bg-rose-950/5' : ''
     ]"
   >
@@ -127,8 +127,8 @@ function handleCollapseToggle() {
 
     <!-- Widget Body Context Grid -->
     <div 
-      class="flex-1 min-h-0 relative overflow-hidden transition-all duration-300"
-      :class="[collapsed ? 'h-0 opacity-0 scale-95 pointer-events-none' : 'h-auto opacity-100 scale-100']"
+      class="flex-1 min-h-0 relative transition-all duration-300"
+      :class="[collapsed ? 'h-0 opacity-0 scale-95 pointer-events-none overflow-hidden' : 'h-auto opacity-100 scale-100']"
     >
       <!-- Isolated Crash Recovery Overlay Screen -->
       <Transition name="fade">
