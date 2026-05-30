@@ -181,7 +181,6 @@ async def analyze_article_sentiment_endpoint(
         )
 
     import httpx
-    from fastapi.responses import JSONResponse
     from backend.app.services.llm import (
         llm_cache,
         analyze_article_sentiment,
