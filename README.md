@@ -11,7 +11,7 @@
 **An Enterprise-grade, high-frequency cryptocurrency and equity sentiment intelligence dashboard.**  
 Engineered with async-safe design patterns, FSM circuit breakers, log-normal market simulators, and production-hardened network topologies.
 
-[Live Application Demo](http://localhost:8080) · [Backend API Sandbox](http://localhost:8000/docs) · [Report Bug](https://github.com/your-username/crypto-sentiment-analyzer/issues)
+[Live Application Demo](https://crypto-market-sentiment-analyzer-1.onrender.com) · [Backend API Sandbox](https://crypto-market-sentiment-analyzer-1.onrender.com/docs) · [Report Bug](https://github.com/your-username/crypto-sentiment-analyzer/issues)
 
 <br>
 
@@ -125,8 +125,10 @@ docker compose up --build -d
 > The backend automatically paces AI inference requests to respect OpenRouter Free Tier rate limits (429). Initial historical data seeding may take 1-2 minutes.
 
 ### 4. Access the Platform
-- 📊 **Live Dashboard**: [http://localhost:8080](http://localhost:8080)
-- 🧠 **API Swagger Sandbox**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- 📊 **Production Live Dashboard**: [https://crypto-market-sentiment-analyzer-1.onrender.com](https://crypto-market-sentiment-analyzer-1.onrender.com)
+- 🧠 **Production API Sandbox**: [https://crypto-market-sentiment-analyzer-1.onrender.com/docs](https://crypto-market-sentiment-analyzer-1.onrender.com/docs)
+- 🏠 **Local Live Dashboard**: [http://localhost:8080](http://localhost:8080)
+- 🔌 **Local API Swagger Sandbox**: [http://localhost:8000/docs](http://localhost:8000/docs)
 
 ---
 
