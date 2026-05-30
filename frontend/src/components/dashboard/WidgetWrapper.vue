@@ -163,7 +163,7 @@ function handleCollapseToggle() {
       </Transition>
 
       <!-- Slot Mounting Area -->
-      <div v-show="!collapsed" class="w-full h-full">
+      <div v-show="!collapsed" class="w-full h-full p-4 sm:p-5 lg:p-6">
         <!-- The key bind allows a clean mount upon crash retry resets -->
         <slot :key="refreshKey" />
       </div>

@@ -81,7 +81,7 @@ const showEmptyState = computed(() => !isLoading.value && filteredArticles.value
 </script>
 
 <template>
-  <div class="glass-card p-6 rounded-3xl border border-border/40 flex flex-col h-[450px] sm:h-[550px] lg:h-full select-none">
+  <div class="flex flex-col h-[450px] sm:h-[550px] lg:h-full select-none">
     <!-- Header Area -->
     <div class="flex items-center justify-between mb-4 shrink-0">
       <div class="flex items-center gap-2">

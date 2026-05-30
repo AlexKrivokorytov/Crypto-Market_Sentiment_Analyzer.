@@ -119,7 +119,7 @@ function cardBorderStyle(id: RouteAssetId, active: boolean): Record<string, stri
   if (active) {
     return {
       borderColor: color,
-      boxShadow: `0 0 0 1px ${color}40, 0 0 20px -4px ${color}30`,
+      boxShadow: `0 0 20px -4px ${color}30`,
     }
   }
   return { borderColor: 'rgba(255,255,255,0.06)' }

@@ -180,7 +180,7 @@ function rankBadgeClass(asset: AssetMetrics): string {
 </script>
 
 <template>
-  <div class="glass-card p-5 rounded-3xl border border-border/40 flex flex-col gap-4">
+  <div class="flex flex-col gap-4">
 
     <!-- ── Header ─────────────────────────────────────────────────────── -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 select-none shrink-0">
