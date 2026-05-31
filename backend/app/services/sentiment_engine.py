@@ -95,6 +95,40 @@ CRYPTO_LEXICON: Dict[str, float] = {
     "investigate": -1.5,
 }
 
+# Improved VADER Lexicon with Multi-Word Phrases
+MULTI_WORD_LEXICON: Dict[str, float] = {
+    "all time high": 4.0,
+    "rug pull": -4.0,
+    "smart contract exploit": -3.8,
+    "sec lawsuit": -3.5,
+    "chapter 11": -4.0,
+    "strategic partnership": 3.0,
+    "mainnet launch": 3.0,
+    "bull run": 3.5,
+    "bear market": -3.0,
+    "etf approval": 3.8,
+    "mass adoption": 3.5,
+}
+
+# Add standard lexicon additions
+CRYPTO_LEXICON.update({
+    "scam": -4.0,
+    "fud": -2.5,
+    "fomo": 2.5,
+    "rekt": -3.0,
+    "unconfirmed": -0.5,
+    "rumor": -0.5,
+    "speculation": 0.0,
+})
+
+def _check_multi_word_phrases(text: str) -> float:
+    score = 0.0
+    text_lower = text.lower()
+    for phrase, val in MULTI_WORD_LEXICON.items():
+        if phrase in text_lower:
+            score += val
+    return score
+
 NEGATIONS: Set[str] = {
     "not",
     "never",
@@ -174,149 +208,53 @@ def _clean_token(token: str) -> str:
 
 def analyze_sentiment_local(title: str, summary: str) -> Dict[str, Any]:
     """
-    Evaluates text valence using self-contained token analysis and VADER scaling.
-    Operates in microseconds, fully thread-safe, and 100% local.
-
-    Args:
-        title: The headline title of the article.
-        summary: The summary or body of the article.
-
-    Returns:
-        Dict containing sentimentScore, sentimentLabel, confidence, keywords, and reasoning.
+    Evaluates text using the improved local VADER engine.
+    Applies 2x weighting to the title and incorporates multi-word phrase detection.
     """
-    combined_text = f"{title} {summary}"
-    tokens = _tokenize_text(combined_text)
+    title_score = _calculate_vader_score(title)
+    summary_score = _calculate_vader_score(summary)
 
-    if not tokens:
-        return {
-            "sentimentScore": 0.0,
-            "sentimentLabel": "Neutral",
-            "confidence": 0.8,
-            "keywords": [],
-            "reasoning": "Text stream empty. Returned default neutral score.",
-        }
+    # Multi-word phrase bonuses
+    title_bonus = _check_multi_word_phrases(title)
+    summary_bonus = _check_multi_word_phrases(summary)
 
-    # Count exclamation marks and question marks for overall intensity adjustments
-    exclamation_count = sum(1 for t in tokens if t == "!")
-    question_count = sum(1 for t in tokens if t == "?")
+    title_score += title_bonus
+    summary_score += summary_bonus
 
-    # Detect if the whole text is in ALL CAPS. If so, capitalization boosts are disabled.
-    all_text_caps = combined_text.isupper()
+    # Title carries 2x weight relative to summary
+    combined = (title_score * 2.0 + summary_score) / 3.0
 
-    # Pre-split sentences around contrastive conjunction 'but'
-    # Conjunction 'but' shifts valence: pre-but is dampened (*0.5), post-but is boosted (*1.5)
-    # Note: Only the FIRST occurrence of 'but' is used for contrastive dampening.
-    # Multiple 'but' clauses (e.g. "crashed but recovered but crashed") are intentionally
-    # simplified to avoid over-engineering the MVP. Only the first pivot matters most.
-    but_idx = -1
-    for i, token in enumerate(tokens):
-        if _clean_token(token) == "but":
-            but_idx = i
-            break
+    # Dampening logic
+    text_combined = f"{title} {summary}".lower()
+    if "unconfirmed" in text_combined or "rumor" in text_combined:
+        combined *= 0.5
 
-    scores: List[float] = []
-    matched_keywords: Set[str] = set()
+    # Normalize to -1.0 to 1.0 safely
+    norm = combined / math.sqrt(combined**2 + ALPHA)
+    # Clip between -1.0 and 1.0
+    norm = max(-1.0, min(1.0, norm))
 
-    for i, token in enumerate(tokens):
-        cleaned = _clean_token(token)
-
-        # Check if the word exists in our specialized crypto-lexicon
-        if cleaned in CRYPTO_LEXICON:
-            valence = CRYPTO_LEXICON[cleaned]
-            matched_keywords.add(cleaned)
-
-            # 1. Capitalization boost: increase valence magnitude by 0.733 if token is in ALL CAPS
-            # (only if the whole sentence is not all caps)
-            if not all_text_caps and _is_all_caps(token):
-                if valence > 0:
-                    valence += 0.733
-                else:
-                    valence -= 0.733
-
-            # 2. Negation shift: check the preceding 2 tokens for negation words
-            negated = False
-            for step in range(1, 3):
-                if i - step >= 0:
-                    prev_cleaned = _clean_token(tokens[i - step])
-                    # If there's a contrastive punctuation or another booster in between, stop checking negations
-                    if prev_cleaned in [",", ";", ".", "!", "?"]:
-                        break
-                    if prev_cleaned in NEGATIONS:
-                        negated = True
-                        break
-            if negated:
-                valence *= -0.74
-
-            # 3. Adverb intensifiers check: inspect the immediate predecessor
-            if i - 1 >= 0:
-                prev_word = _clean_token(tokens[i - 1])
-                if prev_word in INCREMENTAL_INTENSIFIERS:
-                    boost = INCREMENTAL_INTENSIFIERS[prev_word]
-                    if valence > 0:
-                        valence += boost
-                    else:
-                        valence -= boost
-                elif prev_word in DECREMENTAL_INTENSIFIERS:
-                    dampen = DECREMENTAL_INTENSIFIERS[prev_word]
-                    if valence > 0:
-                        valence += dampen  # dampen is negative
-                    else:
-                        valence -= dampen
-
-            # 4. Contrastive BUT split check
-            if but_idx != -1:
-                if i < but_idx:
-                    valence *= 0.5
-                elif i > but_idx:
-                    valence *= 1.5
-
-            scores.append(valence)
-
-    sum_valence = sum(scores)
-
-    # 5. Exclamation marks boost: adds up to 0.876 of valence intensity
-    if exclamation_count > 0:
-        boost = min(exclamation_count, 3) * 0.292
-        if sum_valence > 0:
-            sum_valence += boost
-        elif sum_valence < 0:
-            sum_valence -= boost
-
-    # 6. Apply VADER normalization to bring score strictly into [-1.0, 1.0]
-    if sum_valence == 0:
-        compound = 0.0
-    else:
-        compound = sum_valence / math.sqrt(sum_valence**2 + ALPHA)
-
-    # 7. Question mark penalty: questions indicate uncertainty, dampen score absolute magnitude
-    if question_count > 0:
-        compound *= 0.85
-
-    # Safe boundaries rounding
-    compound = round(max(-1.0, min(1.0, compound)), 4)
-
-    # Map score to label
-    if compound >= 0.05:
+    if norm >= 0.15:
         label = "Bullish"
-    elif compound <= -0.05:
+    elif norm <= -0.15:
         label = "Bearish"
     else:
         label = "Neutral"
 
-    # Compute custom deterministic classification confidence based on match density
-    matched_count = len(scores)
-    density = matched_count / len(tokens) if tokens else 0
-    confidence = min(0.95, max(0.60, round(0.70 + density * 0.5, 2)))
+    # Derive confidence based on intensity
+    intensity = abs(norm)
+    confidence = 0.5 + (intensity * 0.4)
 
-    reasoning = (
-        f"Deterministic local VADER-like compound score of {compound} computed successfully. "
-        f"Analyzed {len(tokens)} tokens, found {matched_count} matches in specialized crypto-lexicon."
-    )
+    # Extract keywords
+    words = re.findall(r"[a-zA-Z-]+", text_combined)
+    keywords = list(set([w for w in words if w in CRYPTO_LEXICON or w in MULTI_WORD_LEXICON])[:5])
+    if not keywords:
+        keywords = ["crypto"]
 
     return {
-        "sentimentScore": compound,
+        "sentimentScore": round(norm, 2),
         "sentimentLabel": label,
-        "confidence": confidence,
-        "keywords": sorted(list(matched_keywords))[:4],
-        "reasoning": reasoning,
+        "confidence": round(confidence, 2),
+        "keywords": keywords[:3],
+        "reasoning": "VADER fallback generated sentiment based on lexicon matches.",
     }

@@ -18,6 +18,17 @@ import type {
   UserPublic,
 } from '../types/market'
 
+export interface FearGreedData {
+  value: number
+  classification: string
+  timestamp: string
+  history: Array<{
+    value: number
+    classification: string
+    timestamp: string
+  }>
+}
+
 const BASE_URL = `${import.meta.env.VITE_API_URL ?? 'http://localhost:8000'}/api/v1`
 
 export type ErrorCallback = (status: number, detail: string, retry: () => Promise<any>) => void
@@ -147,6 +158,10 @@ export const marketApi = {
       }
       throw err
     }
+  },
+
+  getFearGreedIndex(): Promise<FearGreedData> {
+    return apiClient.request<FearGreedData>('/fear-greed')
   },
 
   getHistoricalData(assetId: string, timeframe: string): Promise<HistoricalDataPoint[]> {

@@ -13,3 +13,6 @@ passlib[bcrypt]==1.7.4
 slowapi==0.1.9
 pymongo==4.13.2
 email-validator==2.2.0
+newspaper4k>=0.9.3
+lxml_html_clean>=0.1.1
+cachetools>=5.5.0

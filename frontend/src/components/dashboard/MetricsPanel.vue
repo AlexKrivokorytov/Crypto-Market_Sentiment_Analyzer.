@@ -55,7 +55,7 @@ function getSentimentLabel(score: number): string {
 </script>
 
 <template>
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 h-full overflow-y-auto custom-scrollbar p-3 sm:p-4">
 
     <!-- ── Loading skeleton ──────────────────────────────────────────── -->
     <template v-if="isLoading">

@@ -72,55 +72,54 @@ function handleCollapseToggle() {
 
 <template>
   <div
-    class="glass-panel rounded-3xl border border-border/40 flex flex-col transition-all duration-300 relative group select-none h-full"
+    class="bento-card scanline-overlay rounded-lg border border-border/40 flex flex-col transition-all duration-300 relative group select-none h-full overflow-hidden"
     :class="[
-      collapsed ? 'h-14 sm:h-14 lg:h-14 shadow-none bg-slate-950/20 overflow-hidden' : 'shadow-xl',
-      hasError ? 'border-rose-500/20 bg-rose-950/5' : ''
+      collapsed ? 'h-10 sm:h-10 lg:h-10 shadow-none bg-slate-950/40' : 'shadow-xl',
+      hasError ? 'border-alarm/40 bg-alarm-soft' : ''
     ]"
   >
     <!-- Widget Control Header -->
     <header 
-      class="h-14 flex items-center justify-between px-4 sm:px-6 border-b border-border/20 shrink-0 select-none bg-white/[0.01]"
+      class="h-10 flex items-center justify-between px-3 sm:px-4 border-b border-white/5 shrink-0 select-none bg-white/[0.02]"
     >
-      <div class="flex items-center gap-2 min-w-0">
+      <div class="flex items-center gap-2 min-w-0 z-10">
         <!-- Drag Handle Affordance -->
-        <div class="text-slate-600 hover:text-slate-400 cursor-grab active:cursor-grabbing p-1 rounded hover:bg-white/5 transition-colors hidden sm:block shrink-0">
-          <GripVertical class="h-4 w-4" />
+        <div class="drag-handle text-slate-600 hover:text-slate-400 cursor-grab active:cursor-grabbing p-1 rounded hover:bg-white/5 transition-colors hidden sm:block shrink-0">
+          <GripVertical class="h-4 w-4 pointer-events-none" />
         </div>
         
         <!-- Live Glowing Status Dot -->
         <span 
           class="h-1.5 w-1.5 rounded-full shrink-0 transition-all duration-500" 
-          :class="[hasError ? 'bg-rose-500 shadow-rose-500/50' : 'animate-pulse']"
-          :style="!hasError ? { backgroundColor: 'var(--active-brand-color)', boxShadow: '0 0 8px var(--active-brand-color)' } : {}"
+          :class="[hasError ? 'bg-alarm shadow-[0_0_8px_rgba(255,62,108,0.8)]' : 'bg-signal shadow-[0_0_8px_rgba(0,217,126,0.5)] animate-pulse']"
         ></span>
 
-        <h3 class="text-xs sm:text-sm font-bold tracking-tight text-slate-200 truncate">
+        <h3 class="text-[11px] sm:text-xs font-bold tracking-widest uppercase font-display text-slate-300 truncate">
           {{ title }}
         </h3>
       </div>
 
       <!-- Controls Block -->
-      <div class="flex items-center gap-1.5">
-        <!-- Collapse Trigger -->
-        <button
-          v-if="collapsible && !hasError"
-          @click="handleCollapseToggle"
-          class="p-1.5 rounded-xl hover:bg-white/5 text-slate-400 hover:text-slate-200 transition-all cursor-pointer"
-          :aria-label="collapsed ? 'Expand widget' : 'Collapse widget'"
+      <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+        <!-- Collapse Toggle -->
+        <button 
+          v-if="collapsible"
+          @click.stop="handleCollapseToggle"
+          class="p-1 rounded hover:bg-white/10 text-slate-500 hover:text-slate-300 transition-colors"
+          :title="collapsed ? 'Expand widget' : 'Collapse widget'"
         >
-          <ChevronUp v-if="!collapsed" class="h-4 w-4" />
-          <ChevronDown v-else class="h-4 w-4" />
+          <ChevronDown v-if="collapsed" class="h-3.5 w-3.5" />
+          <ChevronUp v-else class="h-3.5 w-3.5" />
         </button>
-
-        <!-- Hide Trigger -->
-        <button
+        
+        <!-- Hide Toggle -->
+        <button 
           v-if="hideable"
-          @click="emit('hide')"
-          class="p-1.5 rounded-xl hover:bg-white/5 text-slate-400 hover:text-red-400 transition-all cursor-pointer"
-          aria-label="Hide widget"
+          @click.stop="$emit('hide')"
+          class="p-1 rounded hover:bg-white/10 text-slate-500 hover:text-slate-300 transition-colors"
+          title="Hide widget from dashboard"
         >
-          <EyeOff class="h-4 w-4" />
+          <EyeOff class="h-3.5 w-3.5" />
         </button>
       </div>
     </header>

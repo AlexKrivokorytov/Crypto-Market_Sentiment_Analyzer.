@@ -420,39 +420,77 @@ async def _call_openrouter(
     api_url = str(settings.LLM_API_URL).rstrip("/")
     client = get_llm_client()
 
-    resp = await client.post(
-        f"{api_url}/chat/completions",
-        json=payload,
-        headers=headers,
-    )
+    # Define the fallback chain
+    model_chain = [
+        settings.LLM_MODEL,
+        "google/gemini-2.5-flash:free",
+        "meta-llama/llama-3-8b-instruct:free",
+        "mistralai/mistral-7b-instruct:free"
+    ]
+    
+    # Deduplicate in case LLM_MODEL is already one of the fallbacks
+    models = []
+    for m in model_chain:
+        if m not in models:
+            models.append(m)
 
-    # Retry once on 429 with backoff — but only for priority (user-click) calls.
-    # Background calls raise immediately so the circuit breaker handles fallback
-    # without spending a second API request on the same article.
-    if resp.status_code == 429 and priority:
-        logger.warning(
-            "openrouter_429_retry: asset=%s sleeping=10s",
-            asset_symbol,
-        )
-        await asyncio.sleep(10.0)
-        resp = await client.post(
-            f"{api_url}/chat/completions",
-            json=payload,
-            headers=headers,
-        )
+    last_error: Optional[Exception] = None
+    resp = None
+    
+    for i, current_model in enumerate(models):
+        payload["model"] = current_model
+        try:
+            resp = await client.post(
+                f"{api_url}/chat/completions",
+                json=payload,
+                headers=headers,
+            )
+            
+            # Retry once on 429 with backoff for priority calls on the first model
+            if resp.status_code == 429 and priority and i == 0:
+                logger.warning(
+                    "openrouter_429_retry: asset=%s model=%s sleeping=10s",
+                    asset_symbol, current_model
+                )
+                await asyncio.sleep(10.0)
+                resp = await client.post(
+                    f"{api_url}/chat/completions",
+                    json=payload,
+                    headers=headers,
+                )
+            
+            resp.raise_for_status()
+            
+            # Ensure we actually got a response, sometimes free models return empty or error objects
+            data = resp.json()
+            if "choices" in data and len(data["choices"]) > 0:
+                content = str(data["choices"][0]["message"]["content"])
+                result = _parse_llm_json(content)
+                logger.info(
+                    "openrouter_success: asset=%s model=%s label=%s score=%.2f",
+                    asset_symbol,
+                    current_model,
+                    result["sentimentLabel"],
+                    result["sentimentScore"],
+                )
+                return result
+            else:
+                raise ValueError("No choices in LLM response")
+                
+        except (httpx.HTTPStatusError, ValueError) as exc:
+            last_error = exc
+            logger.warning(
+                "openrouter_model_failed: asset=%s model=%s error=%s",
+                asset_symbol,
+                current_model,
+                str(exc),
+            )
+            # Try next model in the fallback chain
 
-    resp.raise_for_status()
-    data = resp.json()
-    content = str(data["choices"][0]["message"]["content"])
-    result = _parse_llm_json(content)
-
-    logger.info(
-        "openrouter_success: asset=%s label=%s score=%.2f",
-        asset_symbol,
-        result["sentimentLabel"],
-        result["sentimentScore"],
-    )
-    return result
+    # If all models in the chain failed, raise the last error
+    if last_error:
+        raise last_error
+    raise ValueError("Fallback chain exhausted with no result.")
 
 
 async def analyze_article_sentiment(
@@ -551,3 +589,127 @@ async def analyze_article_sentiment(
     result = await _sentiment_breaker.call(primary=_primary, fallback=_fallback)
     await llm_cache.set(cache_key, result)
     return result
+
+
+async def analyze_articles_batch(
+    articles: List[Dict[str, str]]
+) -> Dict[str, SentimentResult]:
+    from backend.app.core.config import settings
+
+    if not articles:
+        return {}
+
+    final_results: Dict[str, SentimentResult] = {}
+    to_fetch: List[Dict[str, str]] = []
+
+    for art in articles:
+        asset = art.get('asset_symbol', 'Crypto')
+        c_title = clean_text(art['title'])
+        c_summary = clean_text(art['summary'])
+        cache_key = f"{asset}:{c_title}:{c_summary}"
+        art["_cache_key"] = cache_key
+        
+        cached = await llm_cache.get(cache_key)
+        if cached is not None:
+            final_results[art["id"]] = cached
+        else:
+            to_fetch.append(art)
+
+    if not to_fetch:
+        return final_results
+
+    def _fallback_for_remaining():
+        for art in to_fetch:
+            local_res = analyze_sentiment_local(clean_text(art["title"]), clean_text(art["summary"]))
+            local_res["is_fallback"] = True
+            final_results[art["id"]] = cast(SentimentResult, local_res)
+
+    api_url = settings.LLM_API_URL
+    if not api_url:
+        _fallback_for_remaining()
+        return final_results
+
+    bucket_ok = await _background_rate_limit_ok()
+    if not bucket_ok:
+        logger.info("sentiment_batch_rate_limit_fallback: bucket_full=True")
+        _fallback_for_remaining()
+        return final_results
+
+    prompt = (
+        "You are a senior financial analyst specializing in crypto markets.\n"
+        "Analyze the market sentiment of each article below and return ONLY a valid JSON object.\n"
+        "Each key is the article ID. Each value has these exact fields:\n"
+        '{"sentimentScore": <float -1.0 to 1.0>, '
+        '"sentimentLabel": <"Bullish"|"Bearish"|"Neutral">, '
+        '"confidence": <float 0.0 to 1.0>, '
+        '"keywords": <list of 3-5 relevant financial terms>, '
+        '"reasoning": <one precise sentence citing specific article facts>}\n\n'
+        "Articles:\n"
+    )
+    for art in to_fetch:
+        body = art.get("full_text") or art.get("summary", "")
+        source = art.get("source", "Unknown")
+        prompt += f"--- ID: {art['id']} ---\n"
+        prompt += f"Asset: {art.get('asset_symbol', 'Crypto')} | Source: {source}\n"
+        prompt += f"Title: {art['title']}\n"
+        prompt += f"Content: {body[:1500]}\n\n"
+
+    payload: Dict[str, Any] = {
+        "model": settings.LLM_MODEL,
+        "messages": [
+            {
+                "role": "system",
+                "content": "You are a professional financial sentiment analyst. Respond ONLY with a valid JSON object mapping IDs to results. No markdown, no preamble.",
+            },
+            {"role": "user", "content": prompt},
+        ],
+        "response_format": {"type": "json_object"},
+        "temperature": 0.1,
+        "max_tokens": 8192,
+    }
+
+    headers: Dict[str, str] = {}
+    if settings.LLM_API_KEY:
+        headers["Authorization"] = f"Bearer {settings.LLM_API_KEY}"
+
+    client = get_llm_client()
+
+    async def _primary() -> Dict[str, SentimentResult]:
+        resp = await client.post(
+            f"{str(api_url).rstrip('/')}/chat/completions",
+            json=payload,
+            headers=headers,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        content = str(data["choices"][0]["message"]["content"])
+        
+        match = re.search(r"\{[\s\S]*\}", content)
+        if not match:
+            raise ValueError(f"No JSON object found in batch response")
+        
+        parsed = json.loads(match.group(0))
+        for art in to_fetch:
+            art_id = art["id"]
+            if art_id in parsed:
+                item_data = parsed[art_id]
+                res = _parse_llm_json(json.dumps(item_data))
+                res["is_fallback"] = False
+                final_results[art_id] = res
+                await llm_cache.set(art["_cache_key"], res)
+            else:
+                local_res = analyze_sentiment_local(clean_text(art["title"]), clean_text(art["summary"]))
+                local_res["is_fallback"] = True
+                final_results[art_id] = cast(SentimentResult, local_res)
+        return final_results
+
+    async def _fallback() -> Dict[str, SentimentResult]:
+        logger.warning(
+            "sentiment_batch_llm_fallback_triggered: breaker_state=%s",
+            _sentiment_breaker.state.name,
+        )
+        _fallback_for_remaining()
+        return final_results
+
+    await _sentiment_breaker.call(primary=_primary, fallback=_fallback)
+    return final_results

@@ -35,6 +35,12 @@ import type { RouteAssetId, AssetMetrics } from '@/types/market'
 const router = useRouter()
 const route = useRoute()
 
+
+const props = defineProps<{
+  searchQuery?: string
+}>()
+
+
 const { data: assets, isLoading } = useAssets()
 
 /**
@@ -43,12 +49,29 @@ const { data: assets, isLoading } = useAssets()
  */
 const GRID_ORDER: RouteAssetId[] = ['BTC', 'ETH', 'SOL', 'TON', 'XRP', 'ADA', 'AAPL']
 
-/** Ordered asset list, filtered to only those returned by the API. */
+/** Ordered asset list, filtered to only those returned by the API and matching search query. */
 const orderedAssets = computed<AssetMetrics[]>(() => {
   if (!assets.value) return []
-  return GRID_ORDER
+  
+  // First, extract the pinned assets in the exact order specified by GRID_ORDER
+  let result = GRID_ORDER
     .map(id => assets.value!.find(a => a.id === id))
     .filter((a): a is AssetMetrics => a !== undefined)
+    
+  // Next, append any additional assets that are not in GRID_ORDER
+  const pinnedIds = new Set(GRID_ORDER)
+  const remaining = assets.value.filter(a => !pinnedIds.has(a.id as RouteAssetId))
+  result = [...result, ...remaining]
+    
+  if (props.searchQuery) {
+    const q = props.searchQuery.toLowerCase()
+    result = result.filter(a => 
+      a.id.toLowerCase().includes(q) || 
+      a.name.toLowerCase().includes(q)
+    )
+  }
+  
+  return result
 })
 
 /** Currently active asset from route URL parameter. */
@@ -92,8 +115,8 @@ function getVaderDisplay(sentimentScore: number): string {
  * @param change - 24h percentage change.
  */
 function changeTextClass(change: number): string {
-  if (change > 0) return 'text-emerald-400'
-  if (change < 0) return 'text-rose-400'
+  if (change > 0) return 'text-signal price-flash-up'
+  if (change < 0) return 'text-alarm price-flash-down'
   return 'text-slate-400'
 }
 
@@ -119,10 +142,10 @@ function cardBorderStyle(id: RouteAssetId, active: boolean): Record<string, stri
   if (active) {
     return {
       borderColor: color,
-      boxShadow: `0 0 20px -4px ${color}30`,
+      boxShadow: `0 0 20px -4px ${color}30, inset 0 0 10px ${color}10`,
     }
   }
-  return { borderColor: 'rgba(255,255,255,0.06)' }
+  return { borderColor: 'rgba(255,255,255,0.04)' }
 }
 
 /** Navigates to the selected asset dashboard. */
@@ -132,7 +155,7 @@ function handleCardClick(assetId: string): void {
 </script>
 
 <template>
-  <section aria-label="Market Overview — All Assets">
+  <section aria-label="Market Overview — All Assets" class="h-full overflow-y-auto custom-scrollbar p-3 sm:p-4">
     <!-- ── Loading skeleton grid ───────────────────────────────────────── -->
     <div
       v-if="isLoading"
@@ -156,7 +179,7 @@ function handleCardClick(assetId: string): void {
         v-for="asset in orderedAssets"
         :key="asset.id"
         :class="[
-          'bento-card relative flex flex-col justify-between p-3 sm:p-4 text-left',
+          'bento-card scanline-overlay relative flex flex-col justify-between p-3 sm:p-4 text-left',
           'cursor-pointer group overflow-hidden transition-all duration-250',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-white/30',
           gridCellClass(asset.id as RouteAssetId),

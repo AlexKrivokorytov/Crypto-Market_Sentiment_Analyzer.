@@ -10,6 +10,8 @@ import { storeToRefs } from 'pinia'
 import { getAssetBrandColor } from '@/composables/useCryptoFormatters'
 import type { RouteAssetId } from '@/types/market'
 import { useAssetWebSocket } from '@/composables/useAssetWebSocket'
+import AIChatWidget from '@/components/AIChatWidget.vue'
+import TerminalStatusBar from '@/components/TerminalStatusBar.vue'
 
 const store = useAppStore()
 const { mobileMenuOpen } = storeToRefs(store)
@@ -88,6 +90,10 @@ onErrorCaptured((error: Error, instance, info: string) => {
     </div>
   </div>
   <ToastContainer />
+  <!-- Global AI Chat Widget — rendered outside router so it persists across routes -->
+  <AIChatWidget />
+  <!-- Global Terminal Status Bar -->
+  <TerminalStatusBar v-if="!isFullPage" />
 </template>
 
 <style>

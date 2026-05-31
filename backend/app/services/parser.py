@@ -16,7 +16,9 @@ from typing import Any, Dict, List, Optional, Tuple, cast
 import httpx
 
 from backend.app.core.database import articles_collection, assets_collection
-from backend.app.services.llm import analyze_article_sentiment
+from backend.app.services.article_scraper import enrich_articles_batch
+from backend.app.services.llm import analyze_article_sentiment, analyze_articles_batch, clean_text
+from backend.app.services.sentiment_engine import analyze_sentiment_local
 
 logger = logging.getLogger("app")
 
@@ -267,7 +269,6 @@ async def _apply_sentiment_to_asset(asset_id: str, sentiment_score: float) -> No
 async def process_unified_crypto_feed() -> None:
     """
     Ingests, deduplicates, tags, and evaluates the unified high-frequency crypto feed.
-    Discards duplicates and duplicates matches per asset to prevent key conflicts.
     """
     query = (
         "crypto OR cryptocurrency OR bitcoin OR ethereum OR solana OR toncoin OR ripple OR cardano "
@@ -280,46 +281,32 @@ async def process_unified_crypto_feed() -> None:
 
     parsed_items = parse_rss_xml(xml_content)
     new_articles_count = 0
-    # Track how many remote LLM calls this sweep has already issued.
-    # Stays within MAX_LLM_CALLS_PER_SWEEP to preserve free-tier budget.
-    llm_calls_this_sweep: int = 0
+    
+    articles_to_analyze = []
+    # To keep track of items that are already processed or cached
+    pre_processed_sentiments = {}
 
-    # Limit to top MAX_ARTICLES_PER_SWEEP parsed items to cap blocking time per iteration
     for item in parsed_items[:MAX_ARTICLES_PER_SWEEP]:
-        await asyncio.sleep(0.5)  # Yield loop focus
+        await asyncio.sleep(0.1)
 
         if _is_duplicate_in_window(item["title"]):
             logger.info("rss_deduplication_hit: title=%r", item["title"])
             continue
 
-        # Match text against regex mappings to identify tagged assets
-        matched_assets = []
         text_signature = f"{item['title']} {item['summary']}".lower()
-
-        for asset_id, pattern in ASSET_REGEX.items():
-            if pattern.search(text_signature):
-                matched_assets.append(asset_id)
-
-        # Skip if no assets match
+        matched_assets = [aid for aid, pat in ASSET_REGEX.items() if pat.search(text_signature)]
+        
         if not matched_assets:
             continue
 
         url_hash = _md5_hash(item["url"])
-
-        # Compute sentiment once per article URL — reuse the result for every
-        # matched asset so that a 5-asset article only consumes 1 LLM call.
-        # Force VADER (bypass_breaker=False + bucket check inside llm.py) once
-        # the per-sweep LLM cap is reached.
-        force_local = llm_calls_this_sweep >= MAX_LLM_CALLS_PER_SWEEP
-
-        # Use first matched asset's symbol for the LLM prompt context.
         primary_asset = matched_assets[0]
         primary_id = f"art_{primary_asset}_{url_hash}"
+        
         primary_existing = await articles_collection.find_one({"id": primary_id})
-
+        
         if primary_existing:
-            # Article already processed — reuse stored sentiment values.
-            shared_sentiment: Dict[str, Any] = {
+            pre_processed_sentiments[primary_id] = {
                 "sentimentScore": primary_existing["sentimentScore"],
                 "sentimentLabel": primary_existing["sentimentLabel"],
                 "confidence": primary_existing["confidence"],
@@ -328,38 +315,45 @@ async def process_unified_crypto_feed() -> None:
                 "is_fallback": primary_existing.get("is_fallback", True),
             }
         else:
-            if force_local:
-                from backend.app.services.sentiment_engine import (
-                    analyze_sentiment_local,
-                )
-                from backend.app.services.llm import clean_text
+            articles_to_analyze.append({
+                "id": primary_id,
+                "asset_symbol": primary_asset,
+                "title": item["title"],
+                "summary": item["summary"],
+                "url_hash": url_hash,
+                "matched_assets": matched_assets,
+                "item": item
+            })
 
-                local_res = analyze_sentiment_local(
-                    clean_text(item["title"]), clean_text(item["summary"])
-                )
-                local_res["is_fallback"] = True
-                shared_sentiment = local_res
-            else:
-                shared_sentiment = cast(
-                    Dict[str, Any],
-                    await analyze_article_sentiment(
-                        title=item["title"],
-                        summary=item["summary"],
-                        asset_symbol=primary_asset,
-                    ),
-                )
-                if not shared_sentiment.get("is_fallback", True):
-                    llm_calls_this_sweep += 1
+    # Enrich articles with full text before sending to LLM
+    if articles_to_analyze:
+        articles_to_analyze = await enrich_articles_batch(articles_to_analyze)
 
-        # Loop through matches and persist separately for each asset
-        for asset_id in matched_assets:
-            # Composite primary key: ID is guaranteed unique per asset-article pairing
-            article_id = f"art_{asset_id}_{url_hash}"
+    # Batch analysis — LLM now has full article body via `full_text` field
+    batch_results = {}
+    if articles_to_analyze:
+        batch_results = await analyze_articles_batch(articles_to_analyze)
 
+    # Insert into DB
+    for data in articles_to_analyze:
+        primary_id = data["id"]
+        shared_sentiment = batch_results.get(primary_id)
+        if not shared_sentiment:
+            continue
+            
+        item = data["item"]
+        # Enforce VADER for chart sentiment while keeping LLM for reasoning
+        vader_res = analyze_sentiment_local(clean_text(item["title"]), clean_text(item["summary"]))
+        shared_sentiment["sentimentScore"] = vader_res["sentimentScore"]
+        shared_sentiment["sentimentLabel"] = vader_res["sentimentLabel"]
+            
+        for asset_id in data["matched_assets"]:
+            article_id = f"art_{asset_id}_{data['url_hash']}"
             existing = await articles_collection.find_one({"id": article_id})
             if existing:
                 continue
 
+            item = data["item"]
             try:
                 ts_dt = datetime.datetime.fromisoformat(item["timestamp"])
             except ValueError:
@@ -374,6 +368,7 @@ async def process_unified_crypto_feed() -> None:
                 "title": item["title"],
                 "url": item["url"],
                 "summary": item["summary"],
+                "bodySnippet": data.get("body_snippet", ""),
                 "sentimentScore": shared_sentiment["sentimentScore"],
                 "sentimentLabel": shared_sentiment["sentimentLabel"],
                 "confidence": shared_sentiment["confidence"],
@@ -381,19 +376,12 @@ async def process_unified_crypto_feed() -> None:
                 "llmReasoning": shared_sentiment.get("reasoning", ""),
                 "is_fallback": shared_sentiment.get("is_fallback", False),
             }
-
             await articles_collection.insert_one(article_doc)
             new_articles_count += 1
-
-            # Adjust prices and sentiment reactively
-            await _apply_sentiment_to_asset(
-                asset_id, shared_sentiment["sentimentScore"]
-            )
+            await _apply_sentiment_to_asset(asset_id, shared_sentiment["sentimentScore"])
 
     if new_articles_count > 0:
-        logger.info(
-            "rss_unified_crypto_sweep_complete: enqueued=%d", new_articles_count
-        )
+        logger.info("rss_unified_crypto_sweep_complete: enqueued=%d", new_articles_count)
 
 
 async def process_aapl_feed() -> None:
@@ -407,12 +395,12 @@ async def process_aapl_feed() -> None:
 
     parsed_items = parse_rss_xml(xml_content)
     new_articles_count = 0
+    articles_to_analyze = []
 
     for item in parsed_items[:MAX_AAPL_ARTICLES_PER_SWEEP]:
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.1)
 
         if _is_duplicate_in_window(item["title"]):
-            logger.info("rss_deduplication_hit: title=%r", item["title"])
             continue
 
         url_hash = _md5_hash(item["url"])
@@ -421,11 +409,33 @@ async def process_aapl_feed() -> None:
         existing = await articles_collection.find_one({"id": article_id})
         if existing:
             continue
-
-        sentiment_data = await analyze_article_sentiment(
-            title=item["title"], summary=item["summary"], asset_symbol="AAPL"
-        )
-
+            
+        articles_to_analyze.append({
+            "id": article_id,
+            "asset_symbol": "AAPL",
+            "title": item["title"],
+            "summary": item["summary"],
+            "url_hash": url_hash,
+            "item": item
+        })
+        
+    batch_results = {}
+    if articles_to_analyze:
+        batch_results = await analyze_articles_batch(articles_to_analyze)
+        
+    for data in articles_to_analyze:
+        article_id = data["id"]
+        sentiment_data = batch_results.get(article_id)
+        if not sentiment_data:
+            continue
+            
+        item = data["item"]
+        # Enforce VADER for chart sentiment while keeping LLM for reasoning
+        vader_res = analyze_sentiment_local(clean_text(item["title"]), clean_text(item["summary"]))
+        sentiment_data["sentimentScore"] = vader_res["sentimentScore"]
+        sentiment_data["sentimentLabel"] = vader_res["sentimentLabel"]
+            
+        item = data["item"]
         try:
             ts_dt = datetime.datetime.fromisoformat(item["timestamp"])
         except ValueError:
@@ -444,10 +454,9 @@ async def process_aapl_feed() -> None:
             "sentimentLabel": sentiment_data["sentimentLabel"],
             "confidence": sentiment_data["confidence"],
             "keywords": sentiment_data["keywords"],
-            "llmReasoning": sentiment_data["reasoning"],
+            "llmReasoning": sentiment_data.get("reasoning", ""),
             "is_fallback": sentiment_data.get("is_fallback", False),
         }
-
         await articles_collection.insert_one(article_doc)
         new_articles_count += 1
 

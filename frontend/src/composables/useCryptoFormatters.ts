@@ -248,9 +248,9 @@ export function formatRelativeTime(isoString: string): string {
  * @returns Tailwind class string.
  */
 export function getSentimentTextClass(label: string): string {
-  if (label === 'Bullish') return 'text-bullish'
-  if (label === 'Bearish') return 'text-bearish'
-  return 'text-neutral'
+  if (label === 'Bullish') return 'text-signal'
+  if (label === 'Bearish') return 'text-alarm'
+  return 'text-slate-400'
 }
 
 /**
@@ -260,7 +260,7 @@ export function getSentimentTextClass(label: string): string {
  * @returns Tailwind class string for badge styling.
  */
 export function getSentimentBadgeClass(label: string): string {
-  if (label === 'Bullish') return 'bg-bullish/10 text-bullish border-bullish/30'
-  if (label === 'Bearish') return 'bg-bearish/10 text-bearish border-bearish/30'
-  return 'bg-neutral/10 text-neutral border-neutral/30'
+  if (label === 'Bullish') return 'badge-bullish'
+  if (label === 'Bearish') return 'badge-bearish'
+  return 'badge-neutral'
 }

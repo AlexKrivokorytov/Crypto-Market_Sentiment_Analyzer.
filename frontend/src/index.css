@@ -1,58 +1,83 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   DESIGN SYSTEM — CSS Custom Properties
-   Sprint 5: Gold (#F59E0B) + Violet (#8B5CF6) Fintech/Crypto palette
-   Typography: Space Grotesk (display) + JetBrains Mono (data) + Plus Jakarta Sans (body)
+   DESIGN SYSTEM — Quant HUD v2
+   Aesthetic: Bloomberg Terminal × Modern HUD × Glassmorphism
+   Palette: Signal Green (#00D97E) + Amber (#FFB700) + Red Alarm (#FF3E6C)
+   Base: Near-black #03080F with subtle blue tint
+   Typography: IBM Plex Mono (data/headings) + Plus Jakarta Sans (body)
    ═══════════════════════════════════════════════════════════════════════════ */
 
 @layer base {
   :root {
     /* ── shadcn/ui semantic tokens ──────────────────────────────────────── */
-    --background: 224 71% 4%;
-    --foreground: 213 31% 91%;
+    --background: 220 80% 2%;
+    --foreground: 210 30% 88%;
 
-    --muted: 223 47% 11%;
-    --muted-foreground: 215.4 16.3% 56.9%;
+    --muted: 220 50% 8%;
+    --muted-foreground: 215 16% 50%;
 
-    --popover: 224 71% 4%;
-    --popover-foreground: 213 31% 91%;
+    --popover: 220 80% 2%;
+    --popover-foreground: 210 30% 88%;
 
-    --card: 222.2 47.4% 6.2%;
-    --card-foreground: 213 31% 91%;
+    --card: 220 60% 4%;
+    --card-foreground: 210 30% 88%;
 
-    --border: 223 47% 12%;
-    --input: 223 47% 12%;
+    --border: 220 40% 10%;
+    --input: 220 40% 10%;
 
     --primary: 244.5 74.3% 60.6%;
     --primary-foreground: 210 40% 98%;
 
-    --secondary: 222.2 47.4% 11.2%;
+    --secondary: 220 50% 8%;
     --secondary-foreground: 210 40% 98%;
 
-    --accent: 216 34% 17%;
+    --accent: 216 34% 14%;
     --accent-foreground: 210 40% 98%;
 
-    --destructive: 0 62.8% 30.6%;
+    --destructive: 350 70% 40%;
     --destructive-foreground: 210 40% 98%;
 
-    --ring: 244.5 74.3% 60.6%;
-    --radius: 0.75rem;
+    --ring: 160 80% 43%;
+    --radius: 0.5rem;
 
-    /* ── Sprint 5 Brand Tokens ──────────────────────────────────────────── */
-    --gold:            #f59e0b;
-    --gold-soft:       rgba(245, 158, 11, 0.12);
-    --gold-border:     rgba(245, 158, 11, 0.25);
-    --gold-glow:       rgba(245, 158, 11, 0.18);
+    /* ── Quant HUD Brand Tokens ─────────────────────────────────────────── */
 
-    --violet-cta:      #8b5cf6;
-    --violet-soft:     rgba(139, 92, 246, 0.12);
-    --violet-border:   rgba(139, 92, 246, 0.25);
-    --violet-glow:     rgba(139, 92, 246, 0.18);
+    /* Signal Green — bullish / active / connected */
+    --signal:         #00D97E;
+    --signal-soft:    rgba(0, 217, 126, 0.10);
+    --signal-border:  rgba(0, 217, 126, 0.22);
+    --signal-glow:    rgba(0, 217, 126, 0.20);
 
-    /* ── Asset Brand Colours (used via JS getAssetBrandColor) ────────────── */
+    /* Amber — alert / neutral / prices */
+    --amber:          #FFB700;
+    --amber-soft:     rgba(255, 183, 0, 0.10);
+    --amber-border:   rgba(255, 183, 0, 0.22);
+    --amber-glow:     rgba(255, 183, 0, 0.18);
+
+    /* Red Alarm — bearish / error / danger */
+    --alarm:          #FF3E6C;
+    --alarm-soft:     rgba(255, 62, 108, 0.10);
+    --alarm-border:   rgba(255, 62, 108, 0.22);
+    --alarm-glow:     rgba(255, 62, 108, 0.20);
+
+    /* Violet — interactive CTA (preserved) */
+    --violet-cta:     #8b5cf6;
+    --violet-soft:    rgba(139, 92, 246, 0.12);
+    --violet-border:  rgba(139, 92, 246, 0.25);
+    --violet-glow:    rgba(139, 92, 246, 0.18);
+
+    /* Legacy gold tokens preserved for backward compat */
+    --gold:           #FFB700;
+    --gold-soft:      rgba(255, 183, 0, 0.10);
+    --gold-border:    rgba(255, 183, 0, 0.22);
+    --gold-glow:      rgba(255, 183, 0, 0.18);
+
+    /* ── Asset Brand Colours ─────────────────────────────────────────────── */
     --color-btc:  #F7931A;
     --color-eth:  #627EEA;
     --color-ton:  #0098EA;
@@ -60,6 +85,9 @@
     --color-xrp:  #00AAE4;
     --color-ada:  #3CC8C8;
     --color-aapl: #A2AAAD;
+
+    /* ── HUD Grid Lines ──────────────────────────────────────────────────── */
+    --grid-line: rgba(0, 217, 126, 0.04);
   }
 }
 
@@ -72,99 +100,114 @@
     @apply border-border;
   }
 
+  html {
+    /* Subtle circuit-board grid background */
+    background-color: #03080F;
+    background-image:
+      linear-gradient(var(--grid-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+
   body {
-    @apply bg-background text-foreground;
-    /* Body: Plus Jakarta Sans (unchanged from Sprint 4) */
-    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI',
-                 Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
-    /* Prevent layout shift from subpixel rendering */
+    @apply bg-transparent text-foreground;
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Tabular numbers everywhere prices appear — prevents layout shift on ticks */
-  .font-mono,
-  .price-mono,
-  .ticker-mono {
+  /* Tabular numbers everywhere prices appear */
+  .font-mono, .price-mono, .ticker-mono {
     font-variant-numeric: tabular-nums;
     font-feature-settings: "tnum" 1;
   }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   COMPONENT UTILITIES — Glass System
+   GLASS / PANEL SYSTEM — Quant HUD Edition
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Frosted-glass background panel — dark overlay with backdrop blur */
+/* Primary glass panel — HUD dark with subtle signal tint */
 .glass-panel {
-  background: rgba(8, 10, 22, 0.78);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(255, 255, 255, 0.055);
+  background: rgba(3, 8, 15, 0.82);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(0, 217, 126, 0.08);
 }
 
-/* Interactive glass card — upgrades with gold border glow on hover */
+/* Interactive glass card — upgrades with brand color glow on hover */
 .glass-card {
   position: relative;
   z-index: 1;
-  background: rgba(13, 16, 32, 0.50);
+  background: rgba(5, 12, 24, 0.55);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.045);
-  transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease,
-              transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), z-index 0.25s step-end;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  transition:
+    background 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease,
+    transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+    z-index 0.25s step-end;
 }
 
 .glass-card:hover {
-  background: rgba(13, 16, 32, 0.70);
-  border-color: var(--active-brand-color, var(--gold-border));
-  box-shadow: 0 0 20px -4px var(--active-brand-color-glow, var(--gold-glow)), 0 12px 30px -10px rgba(0, 0, 0, 0.55);
+  background: rgba(5, 12, 24, 0.75);
+  border-color: var(--active-brand-color, var(--signal-border));
+  box-shadow:
+    0 0 20px -4px var(--active-brand-color-glow, var(--signal-glow)),
+    0 12px 30px -10px rgba(0, 0, 0, 0.65);
   transform: translateY(-2px);
   z-index: 10;
-  transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease,
-              transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), z-index 0s step-start;
+  transition:
+    background 0.25s ease,
+    border-color 0.25s ease,
+    box-shadow 0.25s ease,
+    transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+    z-index 0s step-start;
 }
 
-/* Bento grid card — no hover transform (used in grid, not interactive standalone) */
+/* Bento grid card — used in grids, no hover lift */
 .bento-card {
   position: relative;
   z-index: 1;
-  background: rgba(13, 16, 32, 0.50);
+  background: rgba(5, 12, 24, 0.55);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.055);
-  border-radius: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 0.75rem;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, z-index 0.2s step-end;
 }
 
 .bento-card:hover {
   z-index: 10;
-  border-color: rgba(255, 255, 255, 0.10);
-  box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.45);
+  border-color: rgba(0, 217, 126, 0.15);
+  box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 217, 126, 0.06);
   transition: border-color 0.2s ease, box-shadow 0.2s ease, z-index 0s step-start;
 }
 
-/* ─── Gold-tinted glass card variant ────────────────────────────────────── */
-.glass-card-gold {
-  background: linear-gradient(
-    135deg,
-    rgba(245, 158, 11, 0.08) 0%,
-    rgba(13, 16, 32, 0.55)   100%
-  );
+/* ── Signal green tinted card ─────────────────────────────────────────── */
+.glass-card-signal {
+  background: linear-gradient(135deg, rgba(0, 217, 126, 0.07) 0%, rgba(3, 8, 15, 0.60) 100%);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border: 1px solid var(--gold-border);
-  box-shadow: 0 0 16px -4px var(--gold-glow);
+  border: 1px solid var(--signal-border);
+  box-shadow: 0 0 20px -4px var(--signal-glow);
+}
+
+/* ── Amber tinted card ────────────────────────────────────────────────── */
+.glass-card-gold {
+  background: linear-gradient(135deg, rgba(255, 183, 0, 0.07) 0%, rgba(3, 8, 15, 0.60) 100%);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--amber-border);
+  box-shadow: 0 0 16px -4px var(--amber-glow);
   transition: box-shadow 0.25s ease, border-color 0.25s ease;
 }
 
-/* ─── Violet-tinted glass card variant ──────────────────────────────────── */
+/* ── Violet tinted card ───────────────────────────────────────────────── */
 .glass-card-violet {
-  background: linear-gradient(
-    135deg,
-    rgba(139, 92, 246, 0.08) 0%,
-    rgba(13, 16, 32, 0.55)   100%
-  );
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.08) 0%, rgba(3, 8, 15, 0.60) 100%);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border: 1px solid var(--violet-border);
@@ -172,23 +215,24 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   TYPOGRAPHY UTILITIES
+   TYPOGRAPHY — IBM Plex Mono HUD System
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Space Grotesk display headings — for section titles and KPI values */
+/* IBM Plex Mono — all financial data, headings, terminal-style labels */
 .font-display {
-  font-family: 'Space Grotesk', 'Plus Jakarta Sans', -apple-system, sans-serif;
+  font-family: 'IBM Plex Mono', 'Space Grotesk', 'Plus Jakarta Sans', monospace;
+  letter-spacing: -0.02em;
 }
 
-/* JetBrains Mono — for all price, score, and data values */
+/* JetBrains Mono / IBM Plex Mono — prices, scores, data values */
 .price-mono {
-  font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+  font-family: 'IBM Plex Mono', 'Fira Code', Consolas, monospace;
   font-variant-numeric: tabular-nums;
 }
 
-/* ─── Gradient text helpers ──────────────────────────────────────────────── */
+/* ── Gradient text ────────────────────────────────────────────────────── */
 .text-gradient-gold {
-  background: linear-gradient(90deg, #f59e0b 0%, #fbbf24 50%, #fcd34d 100%);
+  background: linear-gradient(90deg, #FFB700 0%, #FFD060 50%, #FFE599 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -201,48 +245,143 @@
   background-clip: text;
 }
 
+/* Main heading gradient: white → slate → signal green */
 .text-gradient-crypto {
-  background: linear-gradient(90deg, #fff 0%, #e2e8f0 40%, #818cf8 100%);
+  background: linear-gradient(90deg, #e2e8f0 0%, #94a3b8 40%, #00D97E 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   SENTIMENT GLOWS + BADGES
+   SENTIMENT SYSTEM — Signal / Alarm / Amber
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .sentiment-bg-bullish {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.10) 0%, rgba(16, 185, 129, 0.02) 100%);
+  background: linear-gradient(135deg, rgba(0, 217, 126, 0.09) 0%, rgba(0, 217, 126, 0.02) 100%);
 }
 
 .sentiment-bg-bearish {
-  background: linear-gradient(135deg, rgba(244, 63, 94, 0.10) 0%, rgba(244, 63, 94, 0.02) 100%);
+  background: linear-gradient(135deg, rgba(255, 62, 108, 0.09) 0%, rgba(255, 62, 108, 0.02) 100%);
 }
 
 .text-glow-bullish {
-  text-shadow: 0 0 12px rgba(16, 185, 129, 0.45);
+  text-shadow: 0 0 12px rgba(0, 217, 126, 0.50);
 }
 
 .text-glow-bearish {
-  text-shadow: 0 0 12px rgba(244, 63, 94, 0.45);
+  text-shadow: 0 0 12px rgba(255, 62, 108, 0.50);
 }
 
 .text-glow-gold {
-  text-shadow: 0 0 14px rgba(245, 158, 11, 0.50);
+  text-shadow: 0 0 14px rgba(255, 183, 0, 0.55);
 }
 
-/* Sentiment label badges with correct WCAG contrast */
+/* Sentiment badges */
 .badge-bullish {
-  @apply bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 font-bold;
+  @apply font-bold;
+  background: rgba(0, 217, 126, 0.10);
+  color: #00D97E;
+  border: 1px solid rgba(0, 217, 126, 0.25);
 }
 
 .badge-bearish {
-  @apply bg-rose-500/10 text-rose-400 border border-rose-500/25 font-bold;
+  @apply font-bold;
+  background: rgba(255, 62, 108, 0.10);
+  color: #FF3E6C;
+  border: 1px solid rgba(255, 62, 108, 0.25);
 }
 
 .badge-neutral {
   @apply bg-slate-700/50 text-slate-400 border border-slate-600/30 font-bold;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SCANLINE OVERLAY — Applied to terminal panels for HUD feel
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Add this class to any panel that should have the scanline effect */
+.scanline-overlay {
+  position: relative;
+  overflow: hidden;
+}
+
+.scanline-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 3px,
+    rgba(0, 217, 126, 0.012) 3px,
+    rgba(0, 217, 126, 0.012) 4px
+  );
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PRICE UPDATE PULSE — Neon flash on value change
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@keyframes price-up-pulse {
+  0%   { color: #00D97E; text-shadow: 0 0 0 rgba(0, 217, 126, 0); }
+  30%  { color: #00D97E; text-shadow: 0 0 16px rgba(0, 217, 126, 0.8), 0 0 32px rgba(0, 217, 126, 0.4); }
+  100% { color: inherit; text-shadow: none; }
+}
+
+@keyframes price-down-pulse {
+  0%   { color: #FF3E6C; text-shadow: 0 0 0 rgba(255, 62, 108, 0); }
+  30%  { color: #FF3E6C; text-shadow: 0 0 16px rgba(255, 62, 108, 0.8), 0 0 32px rgba(255, 62, 108, 0.4); }
+  100% { color: inherit; text-shadow: none; }
+}
+
+.price-flash-up {
+  animation: price-up-pulse 0.8s ease-out forwards;
+}
+
+.price-flash-down {
+  animation: price-down-pulse 0.8s ease-out forwards;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SIGNAL PULSE — Animated border glow keyed to sentiment
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@keyframes signal-pulse-bullish {
+  0%, 100% { box-shadow: 0 0 8px -2px rgba(0, 217, 126, 0.3); }
+  50%       { box-shadow: 0 0 20px -2px rgba(0, 217, 126, 0.6), 0 0 40px -4px rgba(0, 217, 126, 0.2); }
+}
+
+@keyframes signal-pulse-bearish {
+  0%, 100% { box-shadow: 0 0 8px -2px rgba(255, 62, 108, 0.3); }
+  50%       { box-shadow: 0 0 20px -2px rgba(255, 62, 108, 0.6), 0 0 40px -4px rgba(255, 62, 108, 0.2); }
+}
+
+.signal-pulse-bullish {
+  animation: signal-pulse-bullish 3s ease-in-out infinite;
+}
+
+.signal-pulse-bearish {
+  animation: signal-pulse-bearish 3s ease-in-out infinite;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BLINKING CURSOR — Terminal authenticity
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@keyframes blink-cursor {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+.cursor-blink::after {
+  content: '▋';
+  display: inline-block;
+  margin-left: 2px;
+  animation: blink-cursor 1.1s step-end infinite;
+  color: var(--signal);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -252,12 +391,17 @@
 .skeleton-shimmer {
   background: linear-gradient(
     90deg,
-    rgba(255, 255, 255, 0.00) 0%,
-    rgba(255, 255, 255, 0.04) 50%,
-    rgba(255, 255, 255, 0.00) 100%
+    rgba(0, 217, 126, 0.00) 0%,
+    rgba(0, 217, 126, 0.03) 50%,
+    rgba(0, 217, 126, 0.00) 100%
   );
   background-size: 200% 100%;
-  animation: shimmer 1.8s ease-in-out infinite;
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -265,43 +409,35 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 .ticker-track {
-  /* GPU-composited layer prevents jank during live price updates */
   will-change: transform;
   animation: ticker-scroll 40s linear infinite;
-  /* Pause on hover per UX best practice (allows reading) */
 }
 
 .ticker-track:hover {
   animation-play-state: paused;
 }
 
-/* Respect reduced-motion — stop marquee, show static row */
+@keyframes ticker-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .ticker-track {
-    animation: none;
-  }
+  .ticker-track { animation: none; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   CUSTOM SCROLLBARS
+   CUSTOM SCROLLBARS — Signal green tint
    ═══════════════════════════════════════════════════════════════════════════ */
 
-::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.07);
+  background: rgba(0, 217, 126, 0.12);
   border-radius: 9999px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.14);
+  background: rgba(0, 217, 126, 0.25);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -315,58 +451,9 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   AUTH / NAVIGATION UTILITIES (legacy, preserved)
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-.auth-back-btn {
-  position: absolute;
-  top: 1.5rem;
-  left: 1.5rem;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 0.75rem;
-  color: #94a3b8;
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  text-decoration: none;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-}
-
-.auth-back-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(99, 102, 241, 0.3);
-  color: #f8fafc;
-  transform: translateX(-3px);
-  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.15);
-}
-
-.auth-back-btn:active {
-  transform: translateX(0);
-}
-
-.back-icon {
-  transition: transform 0.2s ease-in-out;
-}
-
-.auth-back-btn:hover .back-icon {
-  transform: translateX(-2px);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
    MICRO-INTERACTIONS
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Scale + lift on interactive cards — 150–300ms per UI-UX Pro Max §7 */
 .hover-scale-premium {
   position: relative;
   z-index: 1;
@@ -383,18 +470,65 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   RESPONSIVE FLUID LAYOUT SYSTEM
+   AUTH / NAVIGATION UTILITIES
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Fluid type scale (320px → 2560px viewport) */
+.auth-back-btn {
+  position: absolute;
+  top: 1.5rem;
+  left: 1.5rem;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: rgba(0, 217, 126, 0.04);
+  border: 1px solid rgba(0, 217, 126, 0.12);
+  border-radius: 0.5rem;
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-family: 'IBM Plex Mono', monospace;
+  text-decoration: none;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.auth-back-btn:hover {
+  background: rgba(0, 217, 126, 0.08);
+  border-color: rgba(0, 217, 126, 0.25);
+  color: #00D97E;
+  transform: translateX(-3px);
+  box-shadow: 0 0 16px rgba(0, 217, 126, 0.15);
+}
+
+.auth-back-btn:active { transform: translateX(0); }
+
+.back-icon { transition: transform 0.2s ease-in-out; }
+.auth-back-btn:hover .back-icon { transform: translateX(-2px); }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   RESPONSIVE FLUID LAYOUT
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 :root {
   --text-base: clamp(0.875rem, 0.8rem + 0.25vw, 1rem);
   --text-lg:   clamp(1rem, 0.9rem + 0.4vw, 1.25rem);
 }
 
-/* Dashboard grid: auto-fit from 1 col (mobile) → 3 cols (4K) */
 .dashboard-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
   gap: clamp(0.75rem, 2vw, 1.5rem);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   GRID LAYOUT CANVAS — vue-grid-layout overrides
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.grid-canvas {
+  min-height: 400px;
 }

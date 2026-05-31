@@ -150,7 +150,8 @@ async def seed_database_if_empty() -> None:
     and seeded with initial articles and historical candles.
     """
     try:
-        # Enforce registration of every asset configured in handler_factory
+        all_seed_articles = []
+        
         for handler in handler_factory.all():
             existing_asset = await assets_collection.find_one({"id": handler.asset_id})
             if not existing_asset:
@@ -161,26 +162,54 @@ async def seed_database_if_empty() -> None:
                 )
                 await assets_collection.insert_one(handler.to_seed_document())
 
-                # Seed initial mock articles for this newly registered asset
                 art_count = await articles_collection.count_documents(
                     {"asset_id": handler.asset_id}
                 )
                 if art_count == 0:
-                    logger.info(
-                        "db_seed_articles_incremental: seeding initial articles for asset=%s",
-                        handler.asset_id,
-                    )
                     now = datetime.datetime.now(datetime.timezone.utc)
-                    seed_articles: List[Dict[str, Any]] = []
                     for i in range(10):
                         ts = now - datetime.timedelta(minutes=i * 45)
-                        seed_articles.append(
+                        all_seed_articles.append(
                             generate_single_mock_article(
                                 handler.asset_id, handler.name, ts
                             )
                         )
-                    if seed_articles:
-                        await articles_collection.insert_many(seed_articles)
+
+        if all_seed_articles:
+            logger.info("db_seed: evaluating %d mock articles via Batched LLM...", len(all_seed_articles))
+            from backend.app.services.llm import analyze_articles_batch, clean_text
+            from backend.app.services.sentiment_engine import analyze_sentiment_local
+            
+            batch_input = []
+            for a in all_seed_articles:
+                batch_input.append({
+                    "id": a["id"],
+                    "asset_symbol": a["asset_id"],
+                    "title": a["title"],
+                    "summary": a["summary"]
+                })
+                
+            batch_size = 15
+            all_results = {}
+            for i in range(0, len(batch_input), batch_size):
+                chunk = batch_input[i:i + batch_size]
+                logger.info("db_seed: sending chunk %d", (i//batch_size + 1))
+                res = await analyze_articles_batch(chunk)
+                all_results.update(res)
+                await asyncio.sleep(2.0)
+                
+            for a in all_seed_articles:
+                res = all_results.get(a["id"])
+                if res:
+                    vader_res = analyze_sentiment_local(clean_text(a["title"]), clean_text(a["summary"]))
+                    a["sentimentScore"] = vader_res["sentimentScore"]
+                    a["sentimentLabel"] = vader_res["sentimentLabel"]
+                    a["confidence"] = res["confidence"]
+                    a["keywords"] = res["keywords"]
+                    a["llmReasoning"] = res.get("reasoning", "")
+                    a["is_fallback"] = res.get("is_fallback", False)
+                    
+            await articles_collection.insert_many(all_seed_articles)
 
         # Seed historical candles for every asset × timeframe if not already present
         for handler in handler_factory.all():

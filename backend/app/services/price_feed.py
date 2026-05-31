@@ -17,7 +17,7 @@ import logging
 import random
 from typing import Any, Dict, List, cast
 
-import httpx
+from backend.app.core.http_client import get_shared_client
 
 from backend.app.core.cache import cache
 from backend.app.core.config import settings
@@ -87,8 +87,8 @@ async def fetch_coingecko_prices() -> Dict[str, Dict[str, float]]:
 
     result: Dict[str, Dict[str, float]] = {}
 
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        response = await _coingecko_get(client, url, params)
+    client = get_shared_client()
+    response = await _coingecko_get(client, url, params)
 
     rows: List[Dict[str, Any]] = response.json()
     id_to_symbol = {v: k for k, v in COINGECKO_IDS.items()}
@@ -142,8 +142,8 @@ async def fetch_coingecko_ohlcv(asset_id: str, days: int) -> List[List[float]]:
     url = f"{_COINGECKO_BASE}/coins/{coin_id}/ohlc"
     params = {"vs_currency": "usd", "days": str(days)}
 
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        response = await _coingecko_get(client, url, params)
+    client = get_shared_client()
+    response = await _coingecko_get(client, url, params)
 
     data: List[List[float]] = response.json()
     cache.set(cache_key, data, _COINGECKO_OHLCV_TTL)
@@ -328,12 +328,15 @@ async def fetch_alchemy_prices() -> Dict[str, Dict[str, float]]:
         return await fetch_coingecko_prices()
 
     url = f"https://api.g.alchemy.com/prices/v1/{settings.ALCHEMY_API_KEY}/by-symbol"
-    payload = {"symbols": ["BTC", "ETH", "TON", "SOL", "XRP", "ADA"]}
+    
+    # Query all assets defined in COINGECKO_IDS (which maps frontend tickers to CoinGecko IDs).
+    # Alchemy supports standard tickers like BTC, ETH, SOL, DOGE, etc.
+    payload = {"symbols": list(COINGECKO_IDS.keys())}
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(url, json=payload)
-            if response.status_code == 200:
+        client = get_shared_client()
+        response = await client.post(url, json=payload, timeout=10.0)
+        if response.status_code == 200:
                 body = response.json()
                 result: Dict[str, Dict[str, float]] = {}
                 for item in body.get("data", []):

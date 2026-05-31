@@ -8,6 +8,7 @@ import { Search, Filter, Sparkles, AlertTriangle, CheckCircle2 } from '@lucide/v
 import type { RouteAssetId } from '@/types/market'
 import { marketApi } from '@/services/api'
 import { useQueryClient } from '@tanstack/vue-query'
+import { useVirtualizer } from '@tanstack/vue-virtual'
 
 /** Per-item component refs keyed by article ID, used to call setAnalysisError() directly. */
 const feedItemRefs = new Map<string, InstanceType<typeof FeedItem>>()
@@ -78,6 +79,19 @@ const filteredArticles = computed(() => {
 
 const showSkeleton = computed(() => isLoading.value && newsStore.articles.length === 0)
 const showEmptyState = computed(() => !isLoading.value && filteredArticles.value.length === 0)
+
+const parentRef = ref<HTMLElement | null>(null)
+
+const virtualizer = useVirtualizer(
+  computed(() => ({
+    count: filteredArticles.value.length,
+    getScrollElement: () => parentRef.value,
+    estimateSize: () => 140, // Base terminal log height estimate
+    overscan: 5,
+  }))
+)
+
+const virtualItems = computed(() => virtualizer.value.getVirtualItems())
 </script>
 
 <template>
@@ -175,7 +189,7 @@ const showEmptyState = computed(() => !isLoading.value && filteredArticles.value
     </div>
 
     <!-- Scrollable Feed Container -->
-    <div class="flex-1 min-h-0 overflow-y-auto pr-1">
+    <div ref="parentRef" class="flex-1 min-h-0 overflow-y-auto pr-1 relative">
       <!-- Active loading state when cache is empty -->
       <div v-if="showSkeleton" class="space-y-4">
         <div v-for="i in 3" :key="i" class="p-5 bg-slate-900/20 border border-border/20 rounded-2xl animate-pulse flex flex-col gap-3">
@@ -214,22 +228,32 @@ const showEmptyState = computed(() => !isLoading.value && filteredArticles.value
         </p>
       </div>
 
-      <!-- Article list with smooth entry transitions -->
-      <TransitionGroup
+      <!-- Virtualized Article list -->
+      <div
         v-else
-        name="feed"
-        tag="div"
-        class="space-y-4"
+        class="relative w-full"
+        :style="{ height: `${virtualizer.getTotalSize()}px` }"
       >
-        <FeedItem
-          v-for="article in filteredArticles"
-          :key="article.id"
-          :ref="(el) => { if (el) feedItemRefs.set(article.id, el as InstanceType<typeof FeedItem>) }"
-          :article="article"
-          :model-name="config?.llm_model"
-          @request-ai-analysis="handleRequestAiAnalysis"
-        />
-      </TransitionGroup>
+        <div
+          v-for="virtualItem in virtualItems"
+          :key="String(virtualItem.key)"
+          :data-index="virtualItem.index"
+          class="absolute top-0 left-0 w-full"
+          :style="{
+            transform: `translateY(${virtualItem.start}px)`,
+          }"
+          :ref="(el) => virtualizer.measureElement(el as Element | null)"
+        >
+          <div class="pb-4" v-if="filteredArticles[virtualItem.index]"> <!-- gap equivalent -->
+            <FeedItem
+              :ref="(el) => { if (el && filteredArticles[virtualItem.index]) feedItemRefs.set(filteredArticles[virtualItem.index]!.id, el as InstanceType<typeof FeedItem>) }"
+              :article="filteredArticles[virtualItem.index]!"
+              :model-name="config?.llm_model"
+              @request-ai-analysis="handleRequestAiAnalysis"
+            />
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
