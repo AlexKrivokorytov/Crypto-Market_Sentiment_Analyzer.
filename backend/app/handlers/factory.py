@@ -22,6 +22,7 @@ import logging
 from typing import Iterator
 
 from backend.app.handlers.base import BaseAssetHandler
+from backend.app.services.registry import DynamicRegistry
 from backend.app.handlers.config import HANDLER_CONFIG as HANDLER_CONFIG
 from backend.app.handlers.crypto_handler import CryptoHandler
 from backend.app.handlers.stock_handler import StockHandler
@@ -45,9 +46,9 @@ class AssetHandlerFactory:
         """Initialises an empty registry."""
         self._registry: dict[str, BaseAssetHandler] = {}
 
-    def bootstrap(self) -> None:
+    async def bootstrap(self, registry: "DynamicRegistry") -> None:
         """
-        Reads HANDLER_CONFIG and instantiates all configured handlers.
+        Reads configured assets from the registry and instantiates all configured handlers.
 
         Called once during application startup (lifespan event).
         Idempotent — calling it multiple times is safe (re-registers same handlers).
@@ -57,14 +58,16 @@ class AssetHandlerFactory:
         """
         self._registry.clear()
 
-        for cfg in HANDLER_CONFIG:
-            asset_type: str = str(cfg.get("type", ""))
-            asset_id: str = str(cfg["id"])
-            name: str = str(cfg["name"])
-            base_price: float = float(cfg.get("base_price", 1.0))
-            volatility: float = float(cfg.get("volatility", 0.01))
-            seed_volume: int = int(cfg.get("seed_volume", 1_000_000_000))
-            seed_sentiment: int = int(cfg.get("seed_sentiment", 50))
+        assets = await registry.get_active_assets()
+
+        for cfg in assets:
+            asset_type: str = str(cfg.type)
+            asset_id: str = str(cfg.id)
+            name: str = str(cfg.name)
+            base_price: float = float(cfg.base_price)
+            volatility: float = float(cfg.volatility)
+            seed_volume: int = int(cfg.seed_volume)
+            seed_sentiment: int = int(cfg.seed_sentiment)
 
             if asset_type == "crypto":
                 handler: BaseAssetHandler = CryptoHandler(
@@ -74,7 +77,7 @@ class AssetHandlerFactory:
                     volatility=volatility,
                     seed_volume=seed_volume,
                     seed_sentiment=seed_sentiment,
-                    coingecko_id=cfg.get("coingecko_id"),
+                    coingecko_id=cfg.coingecko_id,
                 )
             elif asset_type == "stock":
                 handler = StockHandler(
@@ -84,7 +87,7 @@ class AssetHandlerFactory:
                     volatility=volatility,
                     seed_volume=seed_volume,
                     seed_sentiment=seed_sentiment,
-                    yfinance_ticker=cfg.get("yfinance_ticker"),
+                    yfinance_ticker=cfg.yfinance_ticker,
                 )
             else:
                 raise ValueError(

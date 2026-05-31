@@ -12,6 +12,7 @@ constructor arguments supplied by AssetHandlerFactory at startup.
 from __future__ import annotations
 
 import logging
+from backend.app.services.price_feed import market_data_provider
 
 from backend.app.handlers.base import BaseAssetHandler, OHLCVRow, PriceTick
 
@@ -43,14 +44,10 @@ class CryptoHandler(BaseAssetHandler):
         Raises:
             RuntimeError: If both Alchemy and CoinGecko return no data for this asset.
         """
-        from backend.app.services.price_feed import (
-            fetch_alchemy_prices,
-            fetch_coingecko_prices,
-        )
 
         # Attempt Alchemy (includes CoinGecko enrichment internally)
         try:
-            all_prices = await fetch_alchemy_prices()
+            all_prices = await market_data_provider.fetch_alchemy_prices()
         except Exception as exc:
             logger.warning(
                 "crypto_handler_alchemy_failed: asset_id=%s error=%s — trying CoinGecko",
@@ -62,7 +59,7 @@ class CryptoHandler(BaseAssetHandler):
         if self.asset_id not in all_prices:
             # Direct CoinGecko call as secondary fallback
             try:
-                all_prices = await fetch_coingecko_prices()
+                all_prices = await market_data_provider.fetch_coingecko_prices()
             except Exception as exc:
                 logger.warning(
                     "crypto_handler_coingecko_failed: asset_id=%s error=%s",
@@ -101,7 +98,7 @@ class CryptoHandler(BaseAssetHandler):
             Chronologically ordered list of OHLCVRow objects.
             Returns an empty list if the CoinGecko API is unavailable.
         """
-        from backend.app.services.price_feed import fetch_coingecko_ohlcv
+        from backend.app.services.price_feed import market_data_provider
 
         if not self.coingecko_id:
             logger.warning(
@@ -111,7 +108,9 @@ class CryptoHandler(BaseAssetHandler):
             return []
 
         try:
-            raw: list[list[float]] = await fetch_coingecko_ohlcv(self.asset_id, days)
+            raw: list[list[float]] = await market_data_provider.fetch_coingecko_ohlcv(
+                self.asset_id, days
+            )
         except Exception as exc:
             logger.warning(
                 "crypto_handler_ohlcv_failed: asset_id=%s days=%d error=%s",

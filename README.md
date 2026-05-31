@@ -25,11 +25,12 @@ Engineered with async-safe design patterns, FSM circuit breakers, log-normal mar
 
 | Feature | Description | Stack |
 |---------|-------------|-------|
-| **🚀 Factory-Driven Scalability** | Fully abstracts data fetching. Adding new crypto/stocks requires changing **one line of config**. | *SOLID, Abstract Base Classes* |
+| **🚀 Dynamic Adaptive Registry** | Full backend OOP refactor with a Dynamic Registry pulling Asset/Lexicon config from MongoDB without hardcoded strings or files. | *SOLID, Dependency Injection* |
 | **🛡️ 3-State FSM Circuit Breaker** | Instantly catches downstream LLM/API timeouts and redirects to local fallback without freezing the Event Loop. | *FastAPI, Asyncio* |
 | **🧠 Real-Time AI Sentiment** | Ingests live Google News RSS feeds and analyzes them asynchronously via Gemini 2.0 Flash (via OpenRouter). | *OpenRouter, httpx* |
 | **🧮 GBM Market Simulator** | Generates log-normal Geometric Brownian Motion simulated prices when external APIs hit Rate Limits (429). | *NumPy, Async Threading* |
-| **🎨 Premium Fluid UI** | Beautiful Glassmorphism, CSS `@container` queries, 60Hz WebSocket reactive rendering, and high-fidelity `<TransitionGroup>` animation system for live news. | *Vue 3, Tailwind, ECharts* |
+| **🎨 Premium Adaptive UI** | Responsive Glassmorphism interface that dynamically loads all tracked crypto & equities. Zero hardcoded asset limits. | *Vue 3, Tailwind, ECharts* |
+| **🛡️ Strict Type Safety** | 100% strict typing on both stacks (`mypy --strict` & `vue-tsc --noEmit`). Flawless code quality and robust error handling. | *Python 3.12, TypeScript* |
 | **🔐 Hardened Docker Topologies** | Private internal-only networks for MongoDB. Strict auth enforced, matching Atlas cloud parity. | *Docker Compose* |
 
 ---
@@ -51,10 +52,12 @@ graph TD
         
         subgraph Handlers["Factory Asset Handlers (SOLID / OOP)"]
             F["AssetHandlerFactory"]
-            F --> CH["CryptoHandler (Alchemy / CoinGecko)"]
-            F --> SH["StockHandler (yfinance)"]
+            DR["DynamicRegistry"]
+            F --> CH["CryptoHandler (MarketDataProvider)"]
+            F --> SH["StockHandler"]
+            DR -.-> F
         end
-        
+
         subgraph Reliability["Fault Tolerance Shield"]
             CB["Circuit Breaker (3-state FSM)"]
             SIM["GBM Market Simulator"]

@@ -11,11 +11,10 @@ Exposes REST routes for:
 
 import asyncio
 import datetime
-import json
 import logging
-import time
 import uuid
-from typing import Any, Dict, List
+import httpx
+from typing import Any, Dict, List, Optional, cast
 
 from bson import ObjectId
 from fastapi import (
@@ -61,7 +60,14 @@ from backend.app.services.auth import (
     remove_from_watchlist,
 )
 from backend.app.services.market_data import get_historical_candles
-from cachetools import TTLCache
+from backend.app.core.cache import cache as app_cache
+from backend.app.core.config import settings
+from backend.app.core.http_client import get_shared_client
+from backend.app.services.llm import (
+    llm_cache,
+    analyze_article_sentiment,
+    clean_text,
+)
 
 router = APIRouter()
 logger = logging.getLogger("app")
@@ -69,12 +75,12 @@ logger = logging.getLogger("app")
 # ──────────────────────────────────────────────────────────────────────────────
 # In-memory cache for Fear & Greed (3600s TTL, zero infra cost)
 # ──────────────────────────────────────────────────────────────────────────────
-_fng_cache = TTLCache(maxsize=1, ttl=3600)
-
+# Using shared app_cache from core instead of individual TTLCaches
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Fear & Greed Index
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 @router.get(
     "/fear-greed",
@@ -96,13 +102,15 @@ async def get_fear_greed(request: Request) -> Dict[str, Any]:
     Raises:
         HTTPException: 502 if the upstream API is unreachable.
     """
-    if "fng" in _fng_cache:
-        return _fng_cache["fng"]
+    cached_fng = app_cache.get("fng")
+    if cached_fng is not None:
+        return cast(Dict[str, Any], cached_fng)
 
-    from backend.app.core.http_client import get_shared_client
     try:
         # Added User-Agent to prevent 403 Forbidden from alternative.me
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"}
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        }
         client = get_shared_client()
         resp = await client.get(
             "https://api.alternative.me/fng/",
@@ -114,8 +122,11 @@ async def get_fear_greed(request: Request) -> Dict[str, Any]:
         data = resp.json()
     except Exception as exc:
         logger.warning("fear_greed_fetch_failed: error=%s", str(exc))
-        if _fng_cache:
-            return _fng_cache  # return stale cache on upstream error
+        cached_fng = app_cache.get("fng")
+        if cached_fng is not None:
+            return cast(
+                Dict[str, Any], cached_fng
+            )  # return stale cache on upstream error
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Could not fetch Fear & Greed Index.",
@@ -146,14 +157,19 @@ async def get_fear_greed(request: Request) -> Dict[str, Any]:
         "history": history,
     }
 
-    _fng_cache["fng"] = result
-    logger.info("fear_greed_fetched: value=%d label=%s", result["value"], result["classification"])
+    app_cache.set("fng", result, 3600)
+    logger.info(
+        "fear_greed_fetched: value=%d label=%s",
+        result["value"],
+        result["classification"],
+    )
     return result
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # AI Chat Assistant
 # ──────────────────────────────────────────────────────────────────────────────
+
 
 @router.post(
     "/chat",
@@ -178,9 +194,6 @@ async def ai_chat(request: Request, body: Dict[str, Any]) -> Dict[str, Any]:
     Raises:
         HTTPException: 400 if message is missing or blank.
     """
-    from backend.app.services.llm import get_llm_client
-    from backend.app.handlers.config import settings
-
     message: str = str(body.get("message", "")).strip()
     if not message:
         raise HTTPException(status_code=400, detail="message is required.")
@@ -200,16 +213,16 @@ async def ai_chat(request: Request, body: Dict[str, Any]) -> Dict[str, Any]:
     context_lines: List[str] = ["=== LIVE MARKET CONTEXT ==="]
     for a in assets_raw:
         context_lines.append(
-            f"{a.get('id','?')} — ${a.get('price',0):.2f} | "
-            f"Sentiment: {a.get('sentimentLabel','?')} ({a.get('sentimentScore',50)})"
+            f"{a.get('id', '?')} — ${a.get('price', 0):.2f} | "
+            f"Sentiment: {a.get('sentimentLabel', '?')} ({a.get('sentimentScore', 50)})"
         )
 
     if recent_articles:
         context_lines.append("\n=== RECENT NEWS ===")
         for art in recent_articles:
             context_lines.append(
-                f"[{art.get('source','?')}] {art.get('title','')} — "
-                f"{art.get('sentimentLabel','?')} | {art.get('llmReasoning','')[:120]}"
+                f"[{art.get('source', '?')}] {art.get('title', '')} — "
+                f"{art.get('sentimentLabel', '?')} | {art.get('llmReasoning', '')[:120]}"
             )
 
     context = "\n".join(context_lines)
@@ -224,22 +237,9 @@ async def ai_chat(request: Request, body: Dict[str, Any]) -> Dict[str, Any]:
     if not settings.LLM_API_URL or not settings.LLM_API_KEY:
         return {"reply": "LLM not configured.", "fallback": True}
 
-    from backend.app.core.http_client import get_shared_client
     headers = {"Authorization": f"Bearer {settings.LLM_API_KEY}"}
-    
-    # Define the fallback chain
-    model_chain = [
-        settings.LLM_MODEL,
-        "google/gemini-2.5-flash:free",
-        "meta-llama/llama-3-8b-instruct:free",
-        "mistralai/mistral-7b-instruct:free"
-    ]
-    
-    # Deduplicate in case LLM_MODEL is already one of the fallbacks
-    models = []
-    for m in model_chain:
-        if m not in models:
-            models.append(m)
+
+    models = settings.llm_fallback_models_list
 
     payload = {
         "model": settings.LLM_MODEL,
@@ -251,7 +251,7 @@ async def ai_chat(request: Request, body: Dict[str, Any]) -> Dict[str, Any]:
         "max_tokens": 300,
     }
 
-    client = get_llm_client()
+    client = get_shared_client()
     api_url = str(settings.LLM_API_URL).rstrip("/")
     last_error: Optional[Exception] = None
 
@@ -263,31 +263,31 @@ async def ai_chat(request: Request, body: Dict[str, Any]) -> Dict[str, Any]:
                 json=payload,
                 headers=headers,
             )
-            
+
             # Retry once on 429 with backoff on the first model
             if resp.status_code == 429 and i == 0:
-                logger.warning(
-                    "ai_chat_429_retry: model=%s sleeping=5s",
-                    current_model
-                )
-                import asyncio
+                logger.warning("ai_chat_429_retry: model=%s sleeping=5s", current_model)
                 await asyncio.sleep(5.0)
                 resp = await client.post(
                     f"{api_url}/chat/completions",
                     json=payload,
                     headers=headers,
                 )
-                
+
             resp.raise_for_status()
             data = resp.json()
-            
+
             if "choices" in data and len(data["choices"]) > 0:
                 reply = data["choices"][0]["message"]["content"].strip()
-                logger.info("ai_chat_success: model=%s message_len=%d", current_model, len(message))
+                logger.info(
+                    "ai_chat_success: model=%s message_len=%d",
+                    current_model,
+                    len(message),
+                )
                 return {"reply": reply, "fallback": False}
             else:
                 raise ValueError("No choices in LLM response")
-                
+
         except Exception as exc:
             last_error = exc
             logger.warning(
@@ -307,9 +307,7 @@ async def ai_chat(request: Request, body: Dict[str, Any]) -> Dict[str, Any]:
 # Market data routes
 # ──────────────────────────────────────────────────────────────────────────────
 
-_assets_cache = TTLCache(maxsize=1, ttl=15)
-_metrics_cache = TTLCache(maxsize=50, ttl=15)
-_sentiment_cache = TTLCache(maxsize=50, ttl=30)
+# Caches are now handled by app_cache
 
 
 @router.get(
@@ -326,14 +324,15 @@ async def list_assets(request: Request) -> List[AssetMetrics]:
     Returns:
         A list of AssetMetrics schemas.
     """
-    if "all" in _assets_cache:
-        return _assets_cache["all"]
+    cached_assets = app_cache.get("assets_all")
+    if cached_assets is not None:
+        return cast(List[AssetMetrics], cached_assets)
 
     cursor = assets_collection.find({})
     assets = await cursor.to_list(length=100)
     result = [AssetMetrics.model_validate(asset) for asset in assets]
-    
-    _assets_cache["all"] = result
+
+    app_cache.set("assets_all", result, 15)
     return result
 
 
@@ -357,8 +356,9 @@ async def get_asset_metrics(request: Request, asset_id: str) -> AssetMetrics:
     Raises:
         HTTPException: 404 if the asset_id is not found.
     """
-    if asset_id in _metrics_cache:
-        return _metrics_cache[asset_id]
+    cached_metrics = app_cache.get(f"metrics_{asset_id}")
+    if cached_metrics is not None:
+        return cast(AssetMetrics, cached_metrics)
 
     asset = await assets_collection.find_one({"id": asset_id})
     if not asset:
@@ -366,9 +366,9 @@ async def get_asset_metrics(request: Request, asset_id: str) -> AssetMetrics:
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Asset with ID '{asset_id}' not found.",
         )
-        
+
     result = AssetMetrics.model_validate(asset)
-    _metrics_cache[asset_id] = result
+    app_cache.set(f"metrics_{asset_id}", result, 15)
     return result
 
 
@@ -394,8 +394,9 @@ async def get_asset_sentiment(
     Raises:
         HTTPException: 404 if the asset_id is not found.
     """
-    if asset_id in _sentiment_cache:
-        return _sentiment_cache[asset_id]
+    cached_sentiment = app_cache.get(f"sentiment_{asset_id}")
+    if cached_sentiment is not None:
+        return cast(List[SentimentArticle], cached_sentiment)
 
     asset = await assets_collection.find_one({"id": asset_id})
     if not asset:
@@ -407,8 +408,8 @@ async def get_asset_sentiment(
     cursor = articles_collection.find({"asset_id": asset_id}).sort("timestamp", -1)
     articles = await cursor.to_list(length=100)
     result = [SentimentArticle.model_validate(art) for art in articles]
-    
-    _sentiment_cache[asset_id] = result
+
+    app_cache.set(f"sentiment_{asset_id}", result, 30)
     return result
 
 
@@ -441,13 +442,6 @@ async def analyze_article_sentiment_endpoint(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Article with ID '{article_id}' not found.",
         )
-
-    import httpx
-    from backend.app.services.llm import (
-        llm_cache,
-        analyze_article_sentiment,
-        clean_text,
-    )
 
     cleaned_title = clean_text(article["title"])
     cleaned_summary = clean_text(article["summary"])

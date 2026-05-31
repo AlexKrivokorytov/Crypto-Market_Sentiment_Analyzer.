@@ -32,6 +32,7 @@ import {
 } from '@/composables/useCryptoFormatters'
 import type { RouteAssetId, AssetMetrics } from '@/types/market'
 
+
 const router = useRouter()
 const route = useRoute()
 
@@ -43,34 +44,19 @@ const props = defineProps<{
 
 const { data: assets, isLoading } = useAssets()
 
-/**
- * Asset display order for the bento grid.
- * BTC is first (hero position), then ETH (tall card), then the rest.
- */
-const GRID_ORDER: RouteAssetId[] = ['BTC', 'ETH', 'SOL', 'TON', 'XRP', 'ADA', 'AAPL']
-
 /** Ordered asset list, filtered to only those returned by the API and matching search query. */
 const orderedAssets = computed<AssetMetrics[]>(() => {
   if (!assets.value) return []
   
-  // First, extract the pinned assets in the exact order specified by GRID_ORDER
-  let result = GRID_ORDER
-    .map(id => assets.value!.find(a => a.id === id))
-    .filter((a): a is AssetMetrics => a !== undefined)
-    
-  // Next, append any additional assets that are not in GRID_ORDER
-  const pinnedIds = new Set(GRID_ORDER)
-  const remaining = assets.value.filter(a => !pinnedIds.has(a.id as RouteAssetId))
-  result = [...result, ...remaining]
-    
+  let result = assets.value
+  
   if (props.searchQuery) {
     const q = props.searchQuery.toLowerCase()
     result = result.filter(a => 
-      a.id.toLowerCase().includes(q) || 
+      a.symbol.toLowerCase().includes(q) || 
       a.name.toLowerCase().includes(q)
     )
   }
-  
   return result
 })
 

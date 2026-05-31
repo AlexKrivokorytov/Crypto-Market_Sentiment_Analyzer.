@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import type { SentimentArticle } from '../types/market'
+import { safeStorage } from '../utils/storage'
 
 const NEWS_CACHE_KEY = 'sentiment_news_cache'
 const MAX_CACHED_ITEMS = 50
@@ -18,14 +19,14 @@ export const useNewsStore = defineStore('news', () => {
     if (isHydrated.value) return
 
     try {
-      const cached = localStorage.getItem(NEWS_CACHE_KEY)
+      const cached = safeStorage.get(NEWS_CACHE_KEY)
       if (cached) {
         articles.value = JSON.parse(cached) as SentimentArticle[]
         console.log(`[NewsStore] Successfully hydrated ${articles.value.length} items from cache.`)
       }
     } catch (err) {
       console.error('[NewsStore] Failed to hydrate cache:', err)
-      localStorage.removeItem(NEWS_CACHE_KEY)
+      safeStorage.remove(NEWS_CACHE_KEY)
     } finally {
       isHydrated.value = true
     }
@@ -42,7 +43,7 @@ export const useNewsStore = defineStore('news', () => {
     articles.value = limited
 
     try {
-      localStorage.setItem(NEWS_CACHE_KEY, JSON.stringify(limited))
+      safeStorage.set(NEWS_CACHE_KEY, JSON.stringify(limited))
     } catch (err) {
       console.error('[NewsStore] Failed to write cache:', err)
     }
@@ -61,7 +62,7 @@ export const useNewsStore = defineStore('news', () => {
     articles.value = updated
 
     try {
-      localStorage.setItem(NEWS_CACHE_KEY, JSON.stringify(updated))
+      safeStorage.set(NEWS_CACHE_KEY, JSON.stringify(updated))
     } catch (err) {
       console.error('[NewsStore] Failed to prepend and cache:', err)
     }
@@ -76,7 +77,7 @@ export const useNewsStore = defineStore('news', () => {
     if (idx !== -1) {
       articles.value[idx] = updatedArticle
       try {
-        localStorage.setItem(NEWS_CACHE_KEY, JSON.stringify(articles.value))
+        safeStorage.set(NEWS_CACHE_KEY, JSON.stringify(articles.value))
       } catch (err) {
         console.error('[NewsStore] Failed to write cache on update:', err)
       }

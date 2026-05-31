@@ -28,7 +28,9 @@ from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
 
 from backend.app.api.v1.endpoints import router as api_router
+from backend.app.api.v1.registry import router as registry_router
 from backend.app.core.limiter import limiter
+from backend.app.core.config import settings
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("app")
@@ -55,9 +57,9 @@ def log_event(level: int, event: str, **kwargs: Any) -> None:
 # Supervised background task wrapper
 # ──────────────────────────────────────────────────────────────────────────────
 
-_BACKOFF_START_SECONDS = 5.0
-_BACKOFF_MAX_SECONDS = 300.0
-_HEALTHY_RUN_SECONDS = 60.0
+_BACKOFF_START_SECONDS = settings.TASK_BACKOFF_START
+_BACKOFF_MAX_SECONDS = settings.TASK_BACKOFF_MAX
+_HEALTHY_RUN_SECONDS = settings.TASK_HEALTHY_RUN_SECONDS
 
 
 async def supervised_task(
@@ -129,10 +131,25 @@ async def lifespan(app_inst: FastAPI) -> AsyncIterator[None]:
         hourly_aggregation_loop,
     )
     from backend.app.services.parser import rss_parser_loop
+    from backend.app.services.registry import dynamic_registry
+    from backend.app.core.seed import (
+        get_default_assets,
+        DEFAULT_CRYPTO_LEXICON,
+        DEFAULT_MULTI_WORD_LEXICON,
+    )
+    from backend.app.schemas.registry import AssetConfig, LexiconConfig
 
-    # Bootstrap the asset handler factory — must happen before any seeding
-    # or background tasks that call handler_factory.all() / .get().
-    handler_factory.bootstrap()
+    # 1. Seed defaults into registry
+    default_assets = [AssetConfig(**cfg) for cfg in get_default_assets()]
+    default_lexicon = LexiconConfig(
+        id="global",
+        crypto_lexicon=DEFAULT_CRYPTO_LEXICON,
+        multi_word_lexicon=DEFAULT_MULTI_WORD_LEXICON,
+    )
+    await dynamic_registry.initialize_defaults(default_assets, default_lexicon)
+
+    # 2. Bootstrap the asset handler factory
+    await handler_factory.bootstrap(dynamic_registry)
     log_event(
         logging.INFO,
         "handler_factory_bootstrapped",
@@ -239,19 +256,9 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, cast(Any, _rate_limit_exceeded_handler))
 
-origins = [
-    "http://localhost:5173",  # Vite dev server
-    "http://localhost:4173",  # Vite preview server
-    "http://127.0.0.1:5173",
-    "http://127.0.0.1:4173",
-    "http://localhost:8080",  # Docker container production port
-    "http://127.0.0.1:8080",
-    "https://crypto-market-sentiment-analyzer-1.onrender.com",
-]
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=settings.cors_origins_list,
     allow_origin_regex=r"https://.*\.onrender\.com|https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
@@ -462,3 +469,4 @@ async def health_check() -> Dict[str, str]:
 # ──────────────────────────────────────────────────────────────────────────────
 
 app.include_router(api_router, prefix="/api/v1")
+app.include_router(registry_router, prefix="/api/v1/registry", tags=["Registry"])

@@ -19,6 +19,18 @@ export function useAssets() {
 }
 
 /**
+ * Fetches the dynamic registry configuration of all available assets.
+ * Used for dynamic UI construction and order preservation.
+ */
+export function useRegistryAssets() {
+  return useQuery<any[]>({
+    queryKey: ['registry', 'assets'],
+    queryFn: () => marketApi.getRegistryAssets(),
+    staleTime: Infinity,
+  })
+}
+
+/**
  * Fetches real-time metrics for a single asset by its ticker ID (e.g. 'BTC').
  * Polling is disabled when `assetId` resolves to an empty string.
  *

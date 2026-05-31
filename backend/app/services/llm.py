@@ -21,12 +21,15 @@ import logging
 import random
 import re
 import time
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple, TypedDict, cast
 
 import httpx
 
 from backend.app.core.circuit_breaker import CircuitBreaker
-from backend.app.services.sentiment_engine import analyze_sentiment_local
+from backend.app.core.config import settings
+from backend.app.core.http_client import get_shared_client
+from backend.app.services.sentiment_engine import sentiment_engine
 
 
 class SentimentResult(TypedDict, total=False):
@@ -214,12 +217,34 @@ llm_cache = LLMAnalysisCache()
 
 # Background callers may use at most this many OpenRouter requests per minute.
 # Leaves the remainder of the free-tier 20 RPM budget for user clicks.
-_MAX_BACKGROUND_RPM: int = 8
+_MAX_BACKGROUND_RPM: int = settings.LLM_MAX_BACKGROUND_RPM
 _WINDOW_SECONDS: float = 60.0
 
-# Sliding window of timestamps for background calls issued in the last minute
-_bg_call_timestamps: List[float] = []
-_bg_rate_lock = asyncio.Lock()
+
+@dataclass
+class _SlidingWindowCounter:
+    """Async-safe token-bucket for the background LLM rate limiter."""
+
+    max_calls: int
+    window_seconds: float
+    _timestamps: list[float] = field(default_factory=list)
+    _lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+
+    async def is_allowed(self) -> bool:
+        async with self._lock:
+            now = time.monotonic()
+            cutoff = now - self.window_seconds
+            self._timestamps = [t for t in self._timestamps if t >= cutoff]
+            if len(self._timestamps) >= self.max_calls:
+                return False
+            self._timestamps.append(now)
+            return True
+
+
+_bg_rate_limiter = _SlidingWindowCounter(
+    max_calls=_MAX_BACKGROUND_RPM,
+    window_seconds=_WINDOW_SECONDS,
+)
 
 
 async def _background_rate_limit_ok() -> bool:
@@ -229,16 +254,7 @@ async def _background_rate_limit_ok() -> bool:
     Implements a sliding-window counter over the last 60 seconds.
     Does NOT block — returns immediately so the caller can fall back to VADER.
     """
-    async with _bg_rate_lock:
-        now = time.monotonic()
-        cutoff = now - _WINDOW_SECONDS
-        # Evict expired timestamps
-        while _bg_call_timestamps and _bg_call_timestamps[0] < cutoff:
-            _bg_call_timestamps.pop(0)
-        if len(_bg_call_timestamps) >= _MAX_BACKGROUND_RPM:
-            return False
-        _bg_call_timestamps.append(now)
-        return True
+    return await _bg_rate_limiter.is_allowed()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -247,8 +263,8 @@ async def _background_rate_limit_ok() -> bool:
 
 _sentiment_breaker = CircuitBreaker(
     name="sentiment_engine",
-    failure_threshold=3,
-    recovery_timeout=60.0,
+    failure_threshold=settings.CB_FAILURE_THRESHOLD,
+    recovery_timeout=settings.CB_RECOVERY_TIMEOUT,
 )
 
 
@@ -274,21 +290,7 @@ def clean_text(text: str) -> str:
     return " ".join(text.split())
 
 
-# Shared singleton httpx client for all OpenRouter calls
-_llm_client: Optional[httpx.AsyncClient] = None
-
-
-def get_llm_client() -> httpx.AsyncClient:
-    """
-    Returns the shared AsyncClient, creating it on first call.
-
-    Returns:
-        A reusable httpx.AsyncClient with a 30-second timeout.
-    """
-    global _llm_client
-    if _llm_client is None:
-        _llm_client = httpx.AsyncClient(timeout=15.0)
-    return _llm_client
+# Removed `_llm_client` and `get_llm_client` since `get_shared_client` is used instead.
 
 
 def _parse_llm_json(content: str) -> SentimentResult:
@@ -382,8 +384,6 @@ async def _call_openrouter(
         httpx.HTTPStatusError: On persistent API errors.
         ValueError:            If the LLM response cannot be parsed as JSON.
     """
-    from backend.app.core.config import settings
-
     prompt = (
         f"Analyze the financial market sentiment for asset '{asset_symbol}'.\n"
         f"Article title: {title}\n"
@@ -418,25 +418,13 @@ async def _call_openrouter(
         headers["Authorization"] = f"Bearer {settings.LLM_API_KEY}"
 
     api_url = str(settings.LLM_API_URL).rstrip("/")
-    client = get_llm_client()
+    client = get_shared_client()
 
-    # Define the fallback chain
-    model_chain = [
-        settings.LLM_MODEL,
-        "google/gemini-2.5-flash:free",
-        "meta-llama/llama-3-8b-instruct:free",
-        "mistralai/mistral-7b-instruct:free"
-    ]
-    
-    # Deduplicate in case LLM_MODEL is already one of the fallbacks
-    models = []
-    for m in model_chain:
-        if m not in models:
-            models.append(m)
+    models = settings.llm_fallback_models_list
 
     last_error: Optional[Exception] = None
     resp = None
-    
+
     for i, current_model in enumerate(models):
         payload["model"] = current_model
         try:
@@ -445,12 +433,13 @@ async def _call_openrouter(
                 json=payload,
                 headers=headers,
             )
-            
+
             # Retry once on 429 with backoff for priority calls on the first model
             if resp.status_code == 429 and priority and i == 0:
                 logger.warning(
                     "openrouter_429_retry: asset=%s model=%s sleeping=10s",
-                    asset_symbol, current_model
+                    asset_symbol,
+                    current_model,
                 )
                 await asyncio.sleep(10.0)
                 resp = await client.post(
@@ -458,9 +447,9 @@ async def _call_openrouter(
                     json=payload,
                     headers=headers,
                 )
-            
+
             resp.raise_for_status()
-            
+
             # Ensure we actually got a response, sometimes free models return empty or error objects
             data = resp.json()
             if "choices" in data and len(data["choices"]) > 0:
@@ -476,7 +465,7 @@ async def _call_openrouter(
                 return result
             else:
                 raise ValueError("No choices in LLM response")
-                
+
         except (httpx.HTTPStatusError, ValueError) as exc:
             last_error = exc
             logger.warning(
@@ -526,8 +515,6 @@ async def analyze_article_sentiment(
         Dict with keys: sentimentScore, sentimentLabel, confidence,
         keywords, reasoning, is_fallback.
     """
-    from backend.app.core.config import settings
-
     cleaned_title = clean_text(title)
     cleaned_summary = clean_text(summary)
     cache_key = f"{asset_symbol}:{cleaned_title}:{cleaned_summary}"
@@ -542,7 +529,9 @@ async def analyze_article_sentiment(
     # ── 2. No remote LLM configured → local VADER ─────────────────────────────
     api_url = settings.LLM_API_URL
     if not api_url:
-        local_res = analyze_sentiment_local(cleaned_title, cleaned_summary)
+        local_res = sentiment_engine.analyze_sentiment_local(
+            cleaned_title, cleaned_summary
+        )
         local_res["is_fallback"] = True
         res = cast(SentimentResult, local_res)
         await llm_cache.set(cache_key, res)
@@ -562,7 +551,9 @@ async def analyze_article_sentiment(
             "sentiment_rate_limit_fallback: asset=%s bucket_full=True",
             asset_symbol,
         )
-        local_res = analyze_sentiment_local(cleaned_title, cleaned_summary)
+        local_res = sentiment_engine.analyze_sentiment_local(
+            cleaned_title, cleaned_summary
+        )
         local_res["is_fallback"] = True
         res = cast(SentimentResult, local_res)
         await llm_cache.set(cache_key, res)
@@ -582,20 +573,23 @@ async def analyze_article_sentiment(
             asset_symbol,
             _sentiment_breaker.state.name,
         )
-        local_res = analyze_sentiment_local(cleaned_title, cleaned_summary)
+        local_res = sentiment_engine.analyze_sentiment_local(
+            cleaned_title, cleaned_summary
+        )
         local_res["is_fallback"] = True
         return cast(SentimentResult, local_res)
 
-    result = await _sentiment_breaker.call(primary=_primary, fallback=_fallback)
+    result = cast(
+        SentimentResult,
+        await _sentiment_breaker.call(primary=_primary, fallback=_fallback),
+    )
     await llm_cache.set(cache_key, result)
     return result
 
 
 async def analyze_articles_batch(
-    articles: List[Dict[str, str]]
+    articles: List[Dict[str, str]],
 ) -> Dict[str, SentimentResult]:
-    from backend.app.core.config import settings
-
     if not articles:
         return {}
 
@@ -603,12 +597,12 @@ async def analyze_articles_batch(
     to_fetch: List[Dict[str, str]] = []
 
     for art in articles:
-        asset = art.get('asset_symbol', 'Crypto')
-        c_title = clean_text(art['title'])
-        c_summary = clean_text(art['summary'])
+        asset = art.get("asset_symbol", "Crypto")
+        c_title = clean_text(art["title"])
+        c_summary = clean_text(art["summary"])
         cache_key = f"{asset}:{c_title}:{c_summary}"
         art["_cache_key"] = cache_key
-        
+
         cached = await llm_cache.get(cache_key)
         if cached is not None:
             final_results[art["id"]] = cached
@@ -618,9 +612,11 @@ async def analyze_articles_batch(
     if not to_fetch:
         return final_results
 
-    def _fallback_for_remaining():
+    def _fallback_for_remaining() -> None:
         for art in to_fetch:
-            local_res = analyze_sentiment_local(clean_text(art["title"]), clean_text(art["summary"]))
+            local_res = sentiment_engine.analyze_sentiment_local(
+                clean_text(art["title"]), clean_text(art["summary"])
+            )
             local_res["is_fallback"] = True
             final_results[art["id"]] = cast(SentimentResult, local_res)
 
@@ -672,7 +668,7 @@ async def analyze_articles_batch(
     if settings.LLM_API_KEY:
         headers["Authorization"] = f"Bearer {settings.LLM_API_KEY}"
 
-    client = get_llm_client()
+    client = get_shared_client()
 
     async def _primary() -> Dict[str, SentimentResult]:
         resp = await client.post(
@@ -683,11 +679,11 @@ async def analyze_articles_batch(
         resp.raise_for_status()
         data = resp.json()
         content = str(data["choices"][0]["message"]["content"])
-        
+
         match = re.search(r"\{[\s\S]*\}", content)
         if not match:
-            raise ValueError(f"No JSON object found in batch response")
-        
+            raise ValueError("No JSON object found in batch response")
+
         parsed = json.loads(match.group(0))
         for art in to_fetch:
             art_id = art["id"]
@@ -698,7 +694,9 @@ async def analyze_articles_batch(
                 final_results[art_id] = res
                 await llm_cache.set(art["_cache_key"], res)
             else:
-                local_res = analyze_sentiment_local(clean_text(art["title"]), clean_text(art["summary"]))
+                local_res = sentiment_engine.analyze_sentiment_local(
+                    clean_text(art["title"]), clean_text(art["summary"])
+                )
                 local_res["is_fallback"] = True
                 final_results[art_id] = cast(SentimentResult, local_res)
         return final_results

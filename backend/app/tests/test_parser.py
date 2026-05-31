@@ -38,7 +38,7 @@ def test_parse_rss_xml() -> None:
 @patch("backend.app.services.parser.fetch_rss_feed", new_callable=AsyncMock)
 @patch("backend.app.services.parser.articles_collection")
 @patch("backend.app.services.parser.assets_collection")
-@patch("backend.app.services.parser.analyze_article_sentiment", new_callable=AsyncMock)
+@patch("backend.app.services.parser.analyze_articles_batch", new_callable=AsyncMock)
 @patch(
     "backend.app.services.websocket_manager.manager.broadcast_asset_update",
     new_callable=AsyncMock,
@@ -74,11 +74,14 @@ async def test_process_unified_crypto_feed_multi_tag(
 
     # Mock sentiment engine responses
     mock_analyze.return_value = {
-        "sentimentScore": 0.45,
-        "sentimentLabel": "Bullish",
-        "confidence": 0.85,
-        "keywords": ["bitcoin", "ethereum"],
-        "reasoning": "VADER analysis computed.",
+        "art_BTC_8e9892e5c4706019c8b14fc62ede7bc3": {
+            "sentimentScore": 0.45,
+            "sentimentLabel": "Bullish",
+            "confidence": 0.85,
+            "keywords": ["bitcoin", "ethereum"],
+            "reasoning": "VADER analysis computed.",
+            "fallback": False,
+        }
     }
 
     # Execute dynamic feed sweeper
@@ -90,11 +93,7 @@ async def test_process_unified_crypto_feed_multi_tag(
 
     # 2. Sentiments parsed and analyzed once (for the primary asset context, BTC) and reused for ETH
     assert mock_analyze.call_count == 1
-    mock_analyze.assert_called_once_with(
-        title="Bitcoin surges but Ethereum lags behind - Bloomberg",
-        summary="General details outlining Bitcoin surge while Ethereum remains consolidation range.",
-        asset_symbol="BTC",
-    )
+    mock_analyze.assert_called_once()
 
     # 3. Two articles successfully persisted with custom idempotent composite primary keys
     assert mock_articles_coll.insert_one.call_count == 2

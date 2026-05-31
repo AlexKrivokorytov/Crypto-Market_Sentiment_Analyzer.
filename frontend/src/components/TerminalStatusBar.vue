@@ -60,8 +60,9 @@ const llmModel = import.meta.env.VITE_LLM_MODEL ?? 'openrouter/free'
 <template>
   <!-- Only render on non-auth pages (parent handles this via v-if) -->
   <div
-    class="fixed bottom-0 left-0 right-0 z-40 h-6 flex items-center px-3 gap-4 select-none"
+    class="fixed bottom-0 right-0 z-40 h-6 flex items-center px-3 gap-4 select-none"
     style="
+      left: var(--sidebar-width, 0px);
       background: rgba(3, 8, 15, 0.95);
       border-top: 1px solid rgba(0, 217, 126, 0.10);
       backdrop-filter: blur(12px);

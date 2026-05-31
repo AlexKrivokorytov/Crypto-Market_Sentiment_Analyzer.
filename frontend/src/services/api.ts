@@ -29,7 +29,9 @@ export interface FearGreedData {
   }>
 }
 
-const BASE_URL = `${import.meta.env.VITE_API_URL ?? 'http://localhost:8000'}/api/v1`
+import { API_HTTP_BASE, API_TIMEOUT_MS } from '../constants/env'
+
+const BASE_URL = API_HTTP_BASE
 
 export type ErrorCallback = (status: number, detail: string, retry: () => Promise<any>) => void
 
@@ -81,13 +83,20 @@ class ApiClient {
     }
 
     const url = `${this.baseUrl}${path}`
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => {
+        controller.abort()
+      }, API_TIMEOUT_MS)
+
     const fetchOptions: RequestInit = {
       ...options,
       headers,
+      signal: controller.signal
     }
 
     try {
       const response = await fetch(url, fetchOptions)
+      clearTimeout(timeoutId)
 
       if (response.status === 204) {
         return undefined as unknown as T
@@ -170,6 +179,20 @@ export const marketApi = {
 
   getArticles(assetId: string): Promise<SentimentArticle[]> {
     return apiClient.request<SentimentArticle[]>(`/assets/${assetId}/sentiment`)
+  },
+
+  /**
+   * Fetches the dynamic registry of active assets from the backend.
+   */
+  getRegistryAssets(): Promise<any[]> {
+    return apiClient.request<any[]>('/registry/assets')
+  },
+
+  /**
+   * Fetches the dynamically configured sentiment lexicon from the backend.
+   */
+  getLexicon(): Promise<any> {
+    return apiClient.request<any>('/registry/lexicon')
   },
 
   getConfig(): Promise<{ llm_configured: boolean; llm_model: string }> {

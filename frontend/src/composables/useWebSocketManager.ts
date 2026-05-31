@@ -1,5 +1,6 @@
 import { ref, watch, onScopeDispose } from 'vue'
 import type { Ref } from 'vue'
+import { API_WS_BASE } from '../constants/env'
 
 export interface WebSocketConfig {
   pingIntervalMs?: number
@@ -105,10 +106,7 @@ export function useWebSocketManager<T>(
 
     connectionStatus.value = reconnectCount.value > 0 ? 'RECONNECTING' : 'CONNECTING'
 
-    // Retrieve and compute the WebSocket protocol from environment configurations
-    const rawApiUrl = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
-    const wsHost = rawApiUrl.replace(/^http/, 'ws')
-    const wsUrl = `${wsHost}/api/v1/ws/${id}`
+    const wsUrl = `${API_WS_BASE}/ws/${id}`
 
     try {
       const ws = new WebSocket(wsUrl)

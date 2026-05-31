@@ -20,15 +20,13 @@ import {
   getAssetBrandColor,
 } from '@/composables/useCryptoFormatters'
 import type { RouteAssetId, AssetMetrics } from '@/types/market'
+
 import { Flame, TrendingUp, TrendingDown, RefreshCw } from '@lucide/vue'
 
 const router = useRouter()
 const route = useRoute()
 
 const { data: assets, isLoading, isError, refetch } = useAssets()
-
-/** Assets shown in the heatmap — crypto only (excludes AAPL). */
-const GRID_ASSETS: RouteAssetId[] = ['BTC', 'ETH', 'TON', 'SOL', 'XRP', 'ADA']
 
 /** The currently active asset ticker from the URL. */
 const activeAssetId = computed(() => route.params.id as string)
@@ -39,9 +37,7 @@ const activeAssetId = computed(() => route.params.id as string)
  */
 const heatmapAssets = computed<AssetMetrics[]>(() => {
   if (!assets.value) return []
-  return GRID_ASSETS
-    .map(symbol => assets.value!.find(a => a.id === symbol))
-    .filter((a): a is AssetMetrics => a !== undefined)
+  return assets.value.filter(a => a.id !== 'AAPL')
 })
 
 // ─── Fear & Greed Composite Index ──────────────────────────────────────────

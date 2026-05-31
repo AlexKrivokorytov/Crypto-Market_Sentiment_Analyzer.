@@ -12,44 +12,37 @@ import re
 import time
 import urllib.parse
 import xml.etree.ElementTree as ET
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, Dict, List, Optional, Tuple
 import httpx
 
 from backend.app.core.database import articles_collection, assets_collection
 from backend.app.services.article_scraper import enrich_articles_batch
-from backend.app.services.llm import analyze_article_sentiment, analyze_articles_batch, clean_text
-from backend.app.services.sentiment_engine import analyze_sentiment_local
+from backend.app.services.llm import analyze_articles_batch, clean_text
+from backend.app.services.sentiment_engine import sentiment_engine
+
+from backend.app.core.config import settings
+from backend.app.handlers.config import HANDLER_CONFIG
 
 logger = logging.getLogger("app")
 
+
 # Precompiled regular expressions for high-performance multi-asset tagging
-ASSET_REGEX: Dict[str, re.Pattern[str]] = {
-    "BTC": re.compile(r"\b(bitcoin|btc)\b", re.IGNORECASE),
-    "ETH": re.compile(r"\b(ethereum|eth|ether)\b", re.IGNORECASE),
-    "TON": re.compile(r"\b(toncoin|ton|telegram open network)\b", re.IGNORECASE),
-    "SOL": re.compile(r"\b(solana|sol)\b", re.IGNORECASE),
-    "XRP": re.compile(r"\b(ripple|xrp)\b", re.IGNORECASE),
-    "ADA": re.compile(r"\b(cardano|ada)\b", re.IGNORECASE),
-    "DOGE": re.compile(r"\b(dogecoin|doge)\b", re.IGNORECASE),
-    "DOT": re.compile(r"\b(polkadot|dot)\b", re.IGNORECASE),
-    "LINK": re.compile(r"\b(chainlink|link)\b", re.IGNORECASE),
-    "AVAX": re.compile(r"\b(avalanche|avax)\b", re.IGNORECASE),
-    "MATIC": re.compile(r"\b(polygon|matic)\b", re.IGNORECASE),
-    "SHIB": re.compile(r"\b(shiba inu|shib)\b", re.IGNORECASE),
-    "LTC": re.compile(r"\b(litecoin|ltc)\b", re.IGNORECASE),
-    "UNI": re.compile(r"\b(uniswap|uni)\b", re.IGNORECASE),
-    "NEAR": re.compile(r"\b(near protocol|near)\b", re.IGNORECASE),
-    "ATOM": re.compile(r"\b(cosmos|atom)\b", re.IGNORECASE),
-}
+def _build_asset_regex() -> dict[str, re.Pattern[str]]:
+    """Derives per-asset keyword patterns from HANDLER_CONFIG.aliases."""
+    regex: dict[str, re.Pattern[str]] = {}
+    for cfg in HANDLER_CONFIG:
+        asset_id = str(cfg["id"])
+        raw_aliases: list[str] = list(cfg.get("aliases", [asset_id.lower()]))
+        pattern = r"\b(" + "|".join(re.escape(a) for a in raw_aliases) + r")\b"
+        regex[asset_id] = re.compile(pattern, re.IGNORECASE)
+    return regex
+
+
+ASSET_REGEX: dict[str, re.Pattern[str]] = _build_asset_regex()
 
 # Maximum articles processed per sweep to cap blocking time per loop iteration.
-MAX_ARTICLES_PER_SWEEP: int = 15
-MAX_AAPL_ARTICLES_PER_SWEEP: int = 3
-
-# Maximum remote LLM calls allowed per unified crypto sweep.
-# The remaining articles fall back to local VADER to preserve the
-# OpenRouter free-tier budget (20 RPM) for user manual clicks.
-MAX_LLM_CALLS_PER_SWEEP: int = 3
+MAX_ARTICLES_PER_SWEEP: int = settings.RSS_MAX_ARTICLES_PER_SWEEP
+MAX_AAPL_ARTICLES_PER_SWEEP: int = settings.RSS_MAX_AAPL_ARTICLES
 
 
 def _md5_hash(text: str) -> str:
@@ -281,7 +274,7 @@ async def process_unified_crypto_feed() -> None:
 
     parsed_items = parse_rss_xml(xml_content)
     new_articles_count = 0
-    
+
     articles_to_analyze = []
     # To keep track of items that are already processed or cached
     pre_processed_sentiments = {}
@@ -294,17 +287,19 @@ async def process_unified_crypto_feed() -> None:
             continue
 
         text_signature = f"{item['title']} {item['summary']}".lower()
-        matched_assets = [aid for aid, pat in ASSET_REGEX.items() if pat.search(text_signature)]
-        
+        matched_assets = [
+            aid for aid, pat in ASSET_REGEX.items() if pat.search(text_signature)
+        ]
+
         if not matched_assets:
             continue
 
         url_hash = _md5_hash(item["url"])
         primary_asset = matched_assets[0]
         primary_id = f"art_{primary_asset}_{url_hash}"
-        
+
         primary_existing = await articles_collection.find_one({"id": primary_id})
-        
+
         if primary_existing:
             pre_processed_sentiments[primary_id] = {
                 "sentimentScore": primary_existing["sentimentScore"],
@@ -315,15 +310,17 @@ async def process_unified_crypto_feed() -> None:
                 "is_fallback": primary_existing.get("is_fallback", True),
             }
         else:
-            articles_to_analyze.append({
-                "id": primary_id,
-                "asset_symbol": primary_asset,
-                "title": item["title"],
-                "summary": item["summary"],
-                "url_hash": url_hash,
-                "matched_assets": matched_assets,
-                "item": item
-            })
+            articles_to_analyze.append(
+                {
+                    "id": primary_id,
+                    "asset_symbol": primary_asset,
+                    "title": item["title"],
+                    "summary": item["summary"],
+                    "url_hash": url_hash,
+                    "matched_assets": matched_assets,
+                    "item": item,
+                }
+            )
 
     # Enrich articles with full text before sending to LLM
     if articles_to_analyze:
@@ -340,13 +337,15 @@ async def process_unified_crypto_feed() -> None:
         shared_sentiment = batch_results.get(primary_id)
         if not shared_sentiment:
             continue
-            
+
         item = data["item"]
         # Enforce VADER for chart sentiment while keeping LLM for reasoning
-        vader_res = analyze_sentiment_local(clean_text(item["title"]), clean_text(item["summary"]))
+        vader_res = sentiment_engine.analyze_sentiment_local(
+            clean_text(item["title"]), clean_text(item["summary"])
+        )
         shared_sentiment["sentimentScore"] = vader_res["sentimentScore"]
         shared_sentiment["sentimentLabel"] = vader_res["sentimentLabel"]
-            
+
         for asset_id in data["matched_assets"]:
             article_id = f"art_{asset_id}_{data['url_hash']}"
             existing = await articles_collection.find_one({"id": article_id})
@@ -378,10 +377,14 @@ async def process_unified_crypto_feed() -> None:
             }
             await articles_collection.insert_one(article_doc)
             new_articles_count += 1
-            await _apply_sentiment_to_asset(asset_id, shared_sentiment["sentimentScore"])
+            await _apply_sentiment_to_asset(
+                asset_id, shared_sentiment["sentimentScore"]
+            )
 
     if new_articles_count > 0:
-        logger.info("rss_unified_crypto_sweep_complete: enqueued=%d", new_articles_count)
+        logger.info(
+            "rss_unified_crypto_sweep_complete: enqueued=%d", new_articles_count
+        )
 
 
 async def process_aapl_feed() -> None:
@@ -409,32 +412,36 @@ async def process_aapl_feed() -> None:
         existing = await articles_collection.find_one({"id": article_id})
         if existing:
             continue
-            
-        articles_to_analyze.append({
-            "id": article_id,
-            "asset_symbol": "AAPL",
-            "title": item["title"],
-            "summary": item["summary"],
-            "url_hash": url_hash,
-            "item": item
-        })
-        
+
+        articles_to_analyze.append(
+            {
+                "id": article_id,
+                "asset_symbol": "AAPL",
+                "title": item["title"],
+                "summary": item["summary"],
+                "url_hash": url_hash,
+                "item": item,
+            }
+        )
+
     batch_results = {}
     if articles_to_analyze:
         batch_results = await analyze_articles_batch(articles_to_analyze)
-        
+
     for data in articles_to_analyze:
         article_id = data["id"]
         sentiment_data = batch_results.get(article_id)
         if not sentiment_data:
             continue
-            
+
         item = data["item"]
         # Enforce VADER for chart sentiment while keeping LLM for reasoning
-        vader_res = analyze_sentiment_local(clean_text(item["title"]), clean_text(item["summary"]))
+        vader_res = sentiment_engine.analyze_sentiment_local(
+            clean_text(item["title"]), clean_text(item["summary"])
+        )
         sentiment_data["sentimentScore"] = vader_res["sentimentScore"]
         sentiment_data["sentimentLabel"] = vader_res["sentimentLabel"]
-            
+
         item = data["item"]
         try:
             ts_dt = datetime.datetime.fromisoformat(item["timestamp"])

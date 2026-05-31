@@ -20,12 +20,12 @@ import type { RouteRecordRaw } from 'vue-router'
 import type { RouteAssetId } from '@/types/market'
 import { useAuthStore } from '@/composables/useAuthStore'
 
-const VALID_ASSET_IDS = new Set<RouteAssetId>([
+const KNOWN_ASSET_IDS = new Set<RouteAssetId>([
   'BTC', 'ETH', 'SOL', 'AAPL', 'TON', 'XRP', 'ADA',
   'DOGE', 'DOT', 'LINK', 'AVAX', 'MATIC', 'SHIB', 'LTC', 'UNI', 'NEAR', 'ATOM',
 ])
 
-const DEFAULT_ASSET: RouteAssetId = 'BTC'
+import { DEFAULT_ASSET } from '@/constants/assets'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -80,7 +80,8 @@ router.beforeEach((to) => {
   // Asset ID validation guard
   if (to.name === 'dashboard') {
     const id = to.params.id as string
-    if (!VALID_ASSET_IDS.has(id as RouteAssetId)) {
+    // Only hard-redirect if the ID is clearly invalid (empty or non-uppercase)
+    if (!id || !/^[A-Z0-9]{1,10}$/.test(id)) {
       return { name: 'dashboard', params: { id: DEFAULT_ASSET }, replace: true }
     }
   }
@@ -100,5 +101,5 @@ router.beforeEach((to) => {
   return true
 })
 
-export { DEFAULT_ASSET, VALID_ASSET_IDS }
+export { DEFAULT_ASSET, KNOWN_ASSET_IDS }
 export default router

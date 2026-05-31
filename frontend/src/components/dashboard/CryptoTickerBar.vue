@@ -23,8 +23,8 @@ import {
   formatChange,
   getAssetBrandColor,
 } from '@/composables/useCryptoFormatters'
-import type { RouteAssetId } from '@/types/market'
-import type { AssetMetrics } from '@/types/market'
+import type { AssetMetrics, RouteAssetId } from '@/types/market'
+
 
 const router = useRouter()
 const { data: assets, isLoading } = useAssets()
@@ -35,12 +35,7 @@ const { data: assets, isLoading } = useAssets()
  */
 const orderedAssets = computed<AssetMetrics[]>(() => {
   if (!assets.value) return []
-  const cryptoOrder: RouteAssetId[] = ['BTC', 'ETH', 'SOL', 'TON', 'XRP', 'ADA']
-  const cryptos = cryptoOrder
-    .map(id => assets.value!.find(a => a.id === id))
-    .filter((a): a is AssetMetrics => a !== undefined)
-  const others = assets.value.filter(a => !cryptoOrder.includes(a.id as RouteAssetId))
-  return [...cryptos, ...others]
+  return assets.value
 })
 
 /**

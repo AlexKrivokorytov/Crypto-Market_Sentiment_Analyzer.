@@ -55,25 +55,36 @@ const ASSET_GRADIENTS: Readonly<Record<RouteAssetId, string>> = {
   ATOM:  'linear-gradient(135deg, rgba(122, 136, 255, 0.12) 0%, rgba(122, 136, 255, 0.02) 100%)',
 }
 
+/** Deterministic hex color derived from the asset ticker string. */
+function _deriveColorFromSymbol(symbol: string): string {
+  let hash = 0
+  for (let i = 0; i < symbol.length; i++) {
+    hash = symbol.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  const hue = Math.abs(hash) % 360
+  return `hsl(${hue}, 65%, 55%)`
+}
+
 /**
  * Returns the canonical brand hex colour for a tracked asset.
  *
- * @param symbol - One of the 7 tracked asset tickers.
+ * @param symbol - Asset ticker.
  * @returns Hex colour string, e.g. '#F7931A'.
  */
-export function getAssetBrandColor(symbol: RouteAssetId): string {
-  return ASSET_BRAND_COLORS[symbol]
+export function getAssetBrandColor(symbol: string): string {
+  return (ASSET_BRAND_COLORS as Record<string, string>)[symbol] ?? _deriveColorFromSymbol(symbol)
 }
 
 /**
  * Returns a two-stop CSS gradient string tinted with the asset brand colour.
  * Suitable for `background` or `backgroundImage` inline styles.
  *
- * @param symbol - One of the 7 tracked asset tickers.
+ * @param symbol - Asset ticker.
  * @returns CSS `linear-gradient(...)` string.
  */
-export function getAssetGradient(symbol: RouteAssetId): string {
-  return ASSET_GRADIENTS[symbol]
+export function getAssetGradient(symbol: string): string {
+  const color = getAssetBrandColor(symbol)
+  return (ASSET_GRADIENTS as Record<string, string>)[symbol] ?? `linear-gradient(135deg, ${color}18 0%, ${color}03 100%)`
 }
 
 // ─── Price Formatting ───────────────────────────────────────────────────────

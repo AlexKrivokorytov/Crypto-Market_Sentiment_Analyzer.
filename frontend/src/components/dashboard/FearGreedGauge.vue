@@ -81,8 +81,8 @@ const sparklineDots = computed((): Array<{ x: number; y: number; value: number }
   const h = data.value?.history ?? []
   if (!h.length) return []
   return h.map((point, idx) => ({
-    x: (idx / Math.max(h.length - 1, 1)) * 100,
-    y: 100 - point.value, // invert so high = top
+    x: 4 + (idx / Math.max(h.length - 1, 1)) * 92,
+    y: 4 + (100 - point.value) * 0.92,
     value: point.value,
   }))
 })
@@ -112,8 +112,8 @@ const sparklineDots = computed((): Array<{ x: number; y: number; value: number }
       <!-- SVG Arc Gauge -->
       <div class="relative flex items-end justify-center w-full">
         <svg
-          viewBox="0 0 120 70"
-          class="w-full max-w-[220px]"
+          viewBox="-10 -10 140 85"
+          class="w-full max-w-[240px] overflow-visible"
           aria-label="Fear and Greed Index gauge"
         >
           <!-- Background track -->

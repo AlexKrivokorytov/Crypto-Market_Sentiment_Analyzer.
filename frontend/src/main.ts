@@ -76,3 +76,12 @@ authStore.restoreSession().finally(() => {
 
   app.mount('#app')
 })
+
+// Unregister any rogue service workers causing "old interface" caching
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    for (const registration of registrations) {
+      registration.unregister()
+    }
+  })
+}

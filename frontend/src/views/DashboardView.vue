@@ -8,6 +8,7 @@ import CryptoTickerBar from '@/components/dashboard/CryptoTickerBar.vue'
 import { Sliders, Eye, EyeOff, RotateCcw, LayoutGrid, Search } from '@lucide/vue'
 import { GridLayout, GridItem } from 'grid-layout-plus'
 import type { RouteAssetId } from '@/types/market'
+import { safeStorage } from '@/utils/storage'
 
 // Lazy-load heavy widgets to split chunks and speed up TTI
 const SentimentHeatmap    = defineAsyncComponent(() => import('@/components/dashboard/SentimentHeatmap.vue'))
@@ -82,7 +83,7 @@ const componentMap: Record<string, ReturnType<typeof defineAsyncComponent>> = {
  */
 function getInitialLayout(): GridWidget[] {
   try {
-    const cached = localStorage.getItem(LAYOUT_CACHE_KEY)
+    const cached = safeStorage.get(LAYOUT_CACHE_KEY)
     if (cached) {
       const parsed = JSON.parse(cached) as GridWidget[]
       const isValid = defaultGrid.every(def => parsed.some(p => p.i === def.i))
@@ -101,7 +102,7 @@ gridWidgets.value = getInitialLayout()
 /** Persists current grid layout to localStorage. */
 function saveLayout(): void {
   try {
-    localStorage.setItem(LAYOUT_CACHE_KEY, JSON.stringify(gridWidgets.value))
+    safeStorage.set(LAYOUT_CACHE_KEY, JSON.stringify(gridWidgets.value))
   } catch {
     // Ignore storage quota errors
   }

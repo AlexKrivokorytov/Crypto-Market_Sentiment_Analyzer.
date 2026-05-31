@@ -1,5 +1,4 @@
-/** Discriminated union of all valid asset ticker symbols tracked by the backend. */
-export type RouteAssetId = 'BTC' | 'ETH' | 'SOL' | 'AAPL' | 'TON' | 'XRP' | 'ADA' | 'DOGE' | 'DOT' | 'LINK' | 'AVAX' | 'MATIC' | 'SHIB' | 'LTC' | 'UNI' | 'NEAR' | 'ATOM'
+export type RouteAssetId = 'BTC' | 'ETH' | 'SOL' | 'AAPL' | 'TON' | 'XRP' | 'ADA' | 'DOGE' | 'DOT' | 'LINK' | 'AVAX' | 'MATIC' | 'SHIB' | 'LTC' | 'UNI' | 'NEAR' | 'ATOM' | (string & {})
 
 /** Sentiment classification label produced by the LLM analysis engine. */
 export type SentimentLabel = 'Bullish' | 'Bearish' | 'Neutral'

@@ -26,6 +26,7 @@ import {
 } from '@/composables/useCryptoFormatters'
 import type { RouteAssetId, AssetMetrics } from '@/types/market'
 
+
 const router = useRouter()
 const route = useRoute()
 const store = useAppStore()
@@ -38,38 +39,16 @@ const selectedAssetId = computed(() => route.params.id as string)
 const { data: assets, isLoading } = useAssets()
 const { data: config, isLoading: configLoading, isError: configError } = useBackendConfig()
 
-/** Ordered crypto asset IDs — rendered in the CRYPTO section. */
-const CRYPTO_IDS: RouteAssetId[] = [
-  'BTC',
-  'ETH',
-  'TON',
-  'SOL',
-  'XRP',
-  'ADA',
-  'DOGE',
-  'DOT',
-  'LINK',
-  'AVAX',
-  'MATIC',
-  'SHIB',
-  'LTC',
-  'UNI',
-  'NEAR',
-  'ATOM'
-]
-
 /** Crypto assets in canonical display order. */
 const cryptoAssets = computed<AssetMetrics[]>(() => {
   if (!assets.value) return []
-  return CRYPTO_IDS
-    .map(id => assets.value!.find(a => a.id === id))
-    .filter((a): a is AssetMetrics => a !== undefined)
+  return assets.value.filter(a => a.id !== 'AAPL')
 })
 
 /** Non-crypto assets (equities, etc.) for the STOCKS section. */
 const stockAssets = computed<AssetMetrics[]>(() => {
   if (!assets.value) return []
-  return assets.value.filter(a => !CRYPTO_IDS.includes(a.id as RouteAssetId))
+  return assets.value.filter(a => a.id === 'AAPL')
 })
 
 /**

@@ -12,6 +12,7 @@
 
 import { ref, nextTick } from 'vue'
 import { MessageCircle, X, Send, Loader2, Bot, User } from '@lucide/vue'
+import { safeStorage } from '@/utils/storage'
 
 interface ChatMessage {
   role: 'user' | 'assistant'
@@ -47,7 +48,7 @@ const QUICK_QUESTIONS = [
  */
 function getRateLimitRemaining(): number {
   try {
-    const last = parseInt(localStorage.getItem(RATE_LIMIT_KEY) ?? '0', 10)
+    const last = parseInt(safeStorage.get(RATE_LIMIT_KEY) ?? '0', 10)
     const elapsed = Date.now() - last
     return elapsed < RATE_LIMIT_MS ? RATE_LIMIT_MS - elapsed : 0
   } catch {
@@ -57,7 +58,7 @@ function getRateLimitRemaining(): number {
 
 function setRateLimitTimestamp(): void {
   try {
-    localStorage.setItem(RATE_LIMIT_KEY, String(Date.now()))
+    safeStorage.set(RATE_LIMIT_KEY, String(Date.now()))
   } catch {
     // ignore storage errors
   }
@@ -141,7 +142,7 @@ function handleKeydown(e: KeyboardEvent): void {
 
 <template>
   <!-- Floating trigger button -->
-  <div class="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+  <div class="fixed bottom-10 right-6 z-50 flex flex-col items-end gap-3">
 
     <!-- Chat panel -->
     <Transition name="chat-slide">

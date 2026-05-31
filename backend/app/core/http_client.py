@@ -1,6 +1,7 @@
 import httpx
 from typing import Optional
 
+
 class HttpClient:
     """
     Singleton HTTP client wrapper.
@@ -8,6 +9,7 @@ class HttpClient:
     reducing latency and resource exhaustion significantly compared to opening
     new clients per request.
     """
+
     _client: Optional[httpx.AsyncClient] = None
 
     @classmethod
@@ -17,10 +19,11 @@ class HttpClient:
         return cls._client
 
     @classmethod
-    async def close(cls):
+    async def close(cls) -> None:
         if cls._client and not cls._client.is_closed:
             await cls._client.aclose()
             cls._client = None
+
 
 # Global helper function for convenience
 def get_shared_client() -> httpx.AsyncClient:

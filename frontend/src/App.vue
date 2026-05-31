@@ -14,7 +14,7 @@ import AIChatWidget from '@/components/AIChatWidget.vue'
 import TerminalStatusBar from '@/components/TerminalStatusBar.vue'
 
 const store = useAppStore()
-const { mobileMenuOpen } = storeToRefs(store)
+const { mobileMenuOpen, sidebarCollapsed } = storeToRefs(store)
 const route = useRoute()
 
 // Establish WebSocket connection room reactively linked to current active asset route parameter
@@ -52,6 +52,10 @@ const isFullPage = computed<boolean>(
   () => !!route.meta.requiresGuest
 )
 
+const sidebarWidth = computed(() =>
+  sidebarCollapsed.value ? '80px' : '288px'
+)
+
 /**
  * Global error boundary. Catches any unhandled render errors from child
  * components, logs them with context, and returns false to prevent Vue
@@ -68,7 +72,7 @@ onErrorCaptured((error: Error, instance, info: string) => {
   <RouterView v-if="isFullPage" />
 
   <!-- Authenticated app shell: sidebar + header + routed content -->
-  <div v-else class="flex h-screen w-screen overflow-hidden bg-[#05070f] text-slate-100 font-sans" :style="{ '--active-brand-color': activeBrandColor, '--active-brand-color-glow': activeBrandColorGlow }">
+  <div v-else class="flex h-screen w-screen overflow-hidden bg-[#05070f] text-slate-100 font-sans" :style="{ '--sidebar-width': sidebarWidth, '--active-brand-color': activeBrandColor, '--active-brand-color-glow': activeBrandColorGlow }">
     <!-- Sidebar (desktop: static, mobile: Drawer overlay) -->
     <Sidebar />
 
@@ -86,7 +90,9 @@ onErrorCaptured((error: Error, instance, info: string) => {
     <div class="flex-1 flex flex-col min-w-0 h-full relative">
       <Header />
       <!-- Routed page content (DashboardView, PortfolioView, NotFoundView…) -->
-      <RouterView />
+      <div class="flex-1 overflow-y-auto pb-6">
+        <RouterView />
+      </div>
     </div>
   </div>
   <ToastContainer />

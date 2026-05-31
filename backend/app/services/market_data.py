@@ -151,7 +151,7 @@ async def seed_database_if_empty() -> None:
     """
     try:
         all_seed_articles = []
-        
+
         for handler in handler_factory.all():
             existing_asset = await assets_collection.find_one({"id": handler.asset_id})
             if not existing_asset:
@@ -176,39 +176,46 @@ async def seed_database_if_empty() -> None:
                         )
 
         if all_seed_articles:
-            logger.info("db_seed: evaluating %d mock articles via Batched LLM...", len(all_seed_articles))
+            logger.info(
+                "db_seed: evaluating %d mock articles via Batched LLM...",
+                len(all_seed_articles),
+            )
             from backend.app.services.llm import analyze_articles_batch, clean_text
-            from backend.app.services.sentiment_engine import analyze_sentiment_local
-            
+            from backend.app.services.sentiment_engine import sentiment_engine
+
             batch_input = []
             for a in all_seed_articles:
-                batch_input.append({
-                    "id": a["id"],
-                    "asset_symbol": a["asset_id"],
-                    "title": a["title"],
-                    "summary": a["summary"]
-                })
-                
+                batch_input.append(
+                    {
+                        "id": a["id"],
+                        "asset_symbol": a["asset_id"],
+                        "title": a["title"],
+                        "summary": a["summary"],
+                    }
+                )
+
             batch_size = 15
             all_results = {}
             for i in range(0, len(batch_input), batch_size):
-                chunk = batch_input[i:i + batch_size]
-                logger.info("db_seed: sending chunk %d", (i//batch_size + 1))
+                chunk = batch_input[i : i + batch_size]
+                logger.info("db_seed: sending chunk %d", (i // batch_size + 1))
                 res = await analyze_articles_batch(chunk)
                 all_results.update(res)
                 await asyncio.sleep(2.0)
-                
+
             for a in all_seed_articles:
-                res = all_results.get(a["id"])
-                if res:
-                    vader_res = analyze_sentiment_local(clean_text(a["title"]), clean_text(a["summary"]))
+                article_res = all_results.get(a["id"])
+                if article_res:
+                    vader_res = sentiment_engine.analyze_sentiment_local(
+                        clean_text(a["title"]), clean_text(a["summary"])
+                    )
                     a["sentimentScore"] = vader_res["sentimentScore"]
                     a["sentimentLabel"] = vader_res["sentimentLabel"]
-                    a["confidence"] = res["confidence"]
-                    a["keywords"] = res["keywords"]
-                    a["llmReasoning"] = res.get("reasoning", "")
-                    a["is_fallback"] = res.get("is_fallback", False)
-                    
+                    a["confidence"] = article_res["confidence"]
+                    a["keywords"] = article_res["keywords"]
+                    a["llmReasoning"] = article_res.get("reasoning", "")
+                    a["is_fallback"] = article_res.get("is_fallback", False)
+
             await articles_collection.insert_many(all_seed_articles)
 
         # Seed historical candles for every asset × timeframe if not already present
@@ -645,7 +652,7 @@ async def background_update_loop() -> None:
       3. Appends a new 1H candle and checks alerts.
       4. Broadcasts the updated AssetMetrics via WebSocket.
     """
-    from backend.app.services.price_feed import fetch_onchain_metrics
+    from backend.app.services.price_feed import market_data_provider
 
     while True:
         try:
@@ -732,7 +739,9 @@ async def background_update_loop() -> None:
                 )
 
                 # Fetch on-chain metrics (ETH gas price, SOL TPS, TON stats)
-                onchain_data = await fetch_onchain_metrics(asset_id)
+                onchain_data = await market_data_provider.fetch_onchain_metrics(
+                    asset_id
+                )
 
                 await assets_collection.update_one(
                     {"id": asset_id},

@@ -18,7 +18,6 @@ import re
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
-import httpx
 
 logger = logging.getLogger("app")
 
@@ -51,6 +50,7 @@ async def _resolve_google_redirect(url: str) -> str:
     if not _GOOGLE_REDIRECT_PATTERNS.match(url):
         return url
     from backend.app.core.http_client import get_shared_client
+
     try:
         client = get_shared_client()
         # HEAD requests generally don't need body, follow_redirects can be passed per request or handled manually.
@@ -78,7 +78,7 @@ def _parse_article_sync(url: str) -> Optional[str]:
     """
     try:
         # newspaper4k is an optional dependency; fail gracefully if not installed
-        import newspaper  # type: ignore[import]
+        import newspaper  # type: ignore[import-not-found]
 
         article = newspaper.Article(url)
         article.download()
@@ -139,9 +139,7 @@ async def scrape_article_body(url: str) -> Optional[str]:
             return None
 
 
-async def enrich_articles_batch(
-    articles: List[Dict[str, Any]]
-) -> List[Dict[str, Any]]:
+async def enrich_articles_batch(articles: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Concurrently enriches a batch of articles with their full body text.
 

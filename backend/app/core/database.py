@@ -23,6 +23,12 @@ historical_collection: AsyncIOMotorCollection[Dict[str, Any]] = db["historical"]
 users_collection: AsyncIOMotorCollection[Dict[str, Any]] = db["users"]
 ticks_buckets_collection: AsyncIOMotorCollection[Dict[str, Any]] = db["ticks_buckets"]
 ticks_collection: AsyncIOMotorCollection[Dict[str, Any]] = db["ticks"]
+registry_assets_collection: AsyncIOMotorCollection[Dict[str, Any]] = db[
+    "registry_assets"
+]
+registry_lexicon_collection: AsyncIOMotorCollection[Dict[str, Any]] = db[
+    "registry_lexicon"
+]
 
 
 async def ping_database() -> bool:
@@ -54,6 +60,16 @@ async def ensure_indexes() -> None:
       - users.email (unique)
     """
     await assets_collection.create_index(
+        [("id", pymongo.ASCENDING)],
+        unique=True,
+        background=True,
+    )
+    await registry_assets_collection.create_index(
+        [("id", pymongo.ASCENDING)],
+        unique=True,
+        background=True,
+    )
+    await registry_lexicon_collection.create_index(
         [("id", pymongo.ASCENDING)],
         unique=True,
         background=True,
