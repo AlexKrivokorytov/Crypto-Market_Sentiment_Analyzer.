@@ -18,6 +18,7 @@ import type {
   UserPublic,
   RegistryAssetConfig,
   LexiconConfig,
+  OrderBookImbalance,
 } from '../types/market'
 
 export interface FearGreedData {
@@ -193,6 +194,11 @@ export const marketApi = {
   getArticles(assetId: string): Promise<SentimentArticle[]> {
     return apiClient.request<SentimentArticle[]>(`/assets/${assetId}/sentiment`)
   },
+
+  getOrderBookImbalance(assetId: string): Promise<OrderBookImbalance> {
+    return apiClient.request<OrderBookImbalance>(`/assets/${assetId}/orderbook`)
+  },
+
 
   /**
    * Fetches the dynamic registry of active assets from the backend.

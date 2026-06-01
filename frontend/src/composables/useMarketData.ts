@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/vue-query'
 import { computed } from 'vue'
 import type { Ref } from 'vue'
 import { marketApi } from '../services/api'
-import type { AssetMetrics, HistoricalDataPoint, SentimentArticle, RouteAssetId, RegistryAssetConfig } from '../types/market'
+import type { AssetMetrics, HistoricalDataPoint, SentimentArticle, RouteAssetId, RegistryAssetConfig, OrderBookImbalance } from '../types/market'
 
 
 /**
@@ -104,3 +104,21 @@ export function useBackendConfig() {
     staleTime: Infinity,
   })
 }
+
+/**
+ * Fetches real-time order book depth imbalance for a given asset.
+ * Polls every 5 seconds to provide a live "Tug of War" effect.
+ */
+export function useOrderBookImbalance(assetId: Ref<RouteAssetId | string> | RouteAssetId | string) {
+  const idRef = computed(() => (typeof assetId === 'string' ? assetId : assetId.value))
+
+  return useQuery<OrderBookImbalance>({
+    queryKey: ['orderbook', idRef],
+    queryFn: () => marketApi.getOrderBookImbalance(idRef.value),
+    refetchInterval: 5000,
+    staleTime: 4000,
+    retry: 1,
+    enabled: computed(() => !!idRef.value),
+  })
+}
+

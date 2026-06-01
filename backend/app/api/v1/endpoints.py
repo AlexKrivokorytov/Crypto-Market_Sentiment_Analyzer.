@@ -53,6 +53,7 @@ from backend.app.schemas.market import (
     ChatResponse,
     HistoricalDataPoint,
     SentimentArticle,
+    OrderBookImbalance,
 )
 from backend.app.services.auth import (
     add_to_watchlist,
@@ -248,6 +249,7 @@ async def get_asset_metrics(request: Request, asset_id: str) -> AssetMetrics:
     """
     Retrieves current market price, daily high/low range, and sentiment index for a single asset.
 
+
     Args:
         asset_id: The ID of the asset (e.g. BTC, ETH, SOL, AAPL).
 
@@ -271,6 +273,21 @@ async def get_asset_metrics(request: Request, asset_id: str) -> AssetMetrics:
     result = AssetMetrics.model_validate(asset)
     app_cache.set(f"metrics_{asset_id}", result, 15)
     return result
+
+
+@router.get(
+    "/assets/{asset_id}/orderbook",
+    response_model=OrderBookImbalance,
+    status_code=status.HTTP_200_OK,
+    summary="Get order book depth and imbalance for a specific asset",
+)
+@limiter.limit("60/minute")
+async def get_orderbook_imbalance(request: Request, asset_id: str) -> OrderBookImbalance:
+    asset_id = asset_id.upper()
+    from backend.app.services.price_feed import market_data_provider
+    data = await market_data_provider.fetch_binance_orderbook(asset_id)
+    return OrderBookImbalance(**data)
+
 
 
 @router.get(

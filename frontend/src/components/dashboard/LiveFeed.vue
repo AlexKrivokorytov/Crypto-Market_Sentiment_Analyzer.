@@ -95,7 +95,7 @@ const virtualItems = computed(() => virtualizer.value.getVirtualItems())
 </script>
 
 <template>
-  <div class="flex flex-col h-[450px] sm:h-[550px] lg:h-full select-none">
+  <div class="flex flex-col h-full w-full select-none relative group">
     <!-- Header Area -->
     <div class="flex items-center justify-between mb-4 shrink-0">
       <div class="flex items-center gap-2">

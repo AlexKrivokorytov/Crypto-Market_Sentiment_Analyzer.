@@ -260,3 +260,16 @@ class TickBucket(BaseModel):
     )
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class OrderBookImbalance(BaseModel):
+    """
+    Schema representing the order book depth and imbalance between buyers and sellers.
+    """
+
+    asset_id: str = Field(..., description="Unique ticker identifier")
+    bids_volume: float = Field(..., description="Total volume of buy orders in range")
+    asks_volume: float = Field(..., description="Total volume of sell orders in range")
+    buy_pressure_percentage: float = Field(..., ge=0.0, le=100.0, description="Percentage of buy pressure (0-100)")
+
+    model_config = ConfigDict(from_attributes=True)

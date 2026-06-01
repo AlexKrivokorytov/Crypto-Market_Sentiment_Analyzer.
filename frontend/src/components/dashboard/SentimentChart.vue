@@ -250,10 +250,17 @@ const chartOption = computed(() => {
 </script>
 
 <template>
-  <div class="glass-card p-5 rounded-3xl border border-border/40 flex flex-col h-[320px] sm:h-[400px] lg:h-[480px]">
+  <div class="glass-card p-4 sm:p-5 rounded-3xl border border-border/40 flex flex-col h-full w-full relative overflow-hidden group">
+    <!-- Abstract gradient mesh for modern 2026 aesthetic -->
+    <div 
+      class="absolute inset-0 opacity-[0.08] pointer-events-none transition-opacity duration-1000 group-hover:opacity-[0.15]"
+      :style="`background: radial-gradient(circle at top right, ${brandColor}, transparent 60%); mix-blend-mode: screen;`"
+      aria-hidden="true"
+    />
 
     <!-- ── Header row: title + timeframe tabs ────────────────────────── -->
-    <div class="flex items-center justify-between mb-4 shrink-0 gap-3">
+    <!-- ── Header row: title + timeframe tabs ────────────────────────── -->
+    <div class="flex items-center justify-between mb-4 shrink-0 gap-3 relative z-10">
       <div class="flex items-center gap-2 select-none min-w-0">
         <div
           class="p-2 rounded-lg border shrink-0"
@@ -301,7 +308,8 @@ const chartOption = computed(() => {
     </div>
 
     <!-- ── Mini indicator row ─────────────────────────────────────────── -->
-    <div class="hidden sm:flex items-center gap-4 text-xs font-semibold mb-3 shrink-0">
+    <!-- ── Mini indicator row ─────────────────────────────────────────── -->
+    <div class="hidden sm:flex items-center gap-4 text-xs font-semibold mb-3 shrink-0 relative z-10">
       <span class="flex items-center gap-1.5 text-muted-foreground">
         <span class="h-2 w-2 rounded bg-bullish" aria-hidden="true" />
         Bullish candle
@@ -317,7 +325,8 @@ const chartOption = computed(() => {
     </div>
 
     <!-- ── Chart canvas ──────────────────────────────────────────────── -->
-    <div class="flex-1 min-h-0 relative">
+    <!-- ── Chart canvas ──────────────────────────────────────────────── -->
+    <div class="flex-1 min-h-0 relative z-10">
       <!-- Loading state -->
       <div
         v-if="isLoading"

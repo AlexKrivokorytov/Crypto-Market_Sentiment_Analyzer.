@@ -24,6 +24,14 @@ export interface AssetMetrics {
   lastDayReset: string
 }
 
+export interface OrderBookImbalance {
+  asset_id: string
+  bids_volume: number
+  asks_volume: number
+  buy_pressure_percentage: number
+}
+
+
 export interface HistoricalDataPoint {
   /** Human-readable timestamp label used as the x-axis category on the chart. */
   timestamp: string

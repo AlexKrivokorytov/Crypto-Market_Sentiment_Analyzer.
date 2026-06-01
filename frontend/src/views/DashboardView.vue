@@ -16,7 +16,8 @@ const MetricsPanel        = defineAsyncComponent(() => import('@/components/dash
 const SentimentChart      = defineAsyncComponent(() => import('@/components/dashboard/SentimentChart.vue'))
 const LiveFeed            = defineAsyncComponent(() => import('@/components/dashboard/LiveFeed.vue'))
 const MarketOverviewGrid  = defineAsyncComponent(() => import('@/components/dashboard/MarketOverviewGrid.vue'))
-const NewsCorrelationPanel = defineAsyncComponent(() => import('@/components/dashboard/NewsCorrelationPanel.vue'))
+const OrderBookImbalance  = defineAsyncComponent(() => import('@/components/dashboard/OrderBookImbalance.vue'))
+const TechnicalPulse      = defineAsyncComponent(() => import('@/components/dashboard/TechnicalPulse.vue'))
 const FearGreedGauge      = defineAsyncComponent(() => import('@/components/dashboard/FearGreedGauge.vue'))
 
 const route = useRoute()
@@ -38,7 +39,8 @@ const componentMap = {
   metrics:   MetricsPanel,
   chart:     SentimentChart,
   feed:      LiveFeed,
-  correlation: NewsCorrelationPanel,
+  orderbook: OrderBookImbalance,
+  technical: TechnicalPulse,
 } as const
 
 type WidgetId = keyof typeof componentMap
@@ -60,16 +62,17 @@ interface GridWidget {
   isResizable?: boolean
 }
 
-const LAYOUT_CACHE_KEY = 'dashboard_grid_layout_v4'
+const LAYOUT_CACHE_KEY = 'dashboard_grid_layout_v6'
 
 const WIDGET_META: Record<WidgetId, { title: string; defaultPos: Omit<GridWidget, 'i' | 'title' | 'visible' | 'collapsed'> }> = {
   overview:    { title: 'Market Overview',           defaultPos: { x: 0, y: 0,  w: 12, h: 8,  minH: 6, isResizable: true } },
-  heatmap:     { title: 'Sentiment Heatmap',         defaultPos: { x: 0, y: 8,  w: 8,  h: 6,  minH: 4, isResizable: true } },
-  feargreed:   { title: 'Fear & Greed Index',        defaultPos: { x: 8, y: 8,  w: 4,  h: 6,  minH: 5, isResizable: true } },
-  metrics:     { title: 'Price Metrics',             defaultPos: { x: 0, y: 14, w: 12, h: 4,  minH: 3, isResizable: true } },
-  chart:       { title: 'Interactive Overlay Chart', defaultPos: { x: 0, y: 18, w: 8,  h: 9,  minH: 6, isResizable: true } },
-  feed:        { title: 'Live Sentiment Feed',       defaultPos: { x: 8, y: 18, w: 4,  h: 5,  minH: 4, isResizable: true } },
-  correlation: { title: 'News Correlation',          defaultPos: { x: 8, y: 23, w: 4,  h: 4,  minH: 3, isResizable: true } },
+  heatmap:     { title: 'Sentiment Heatmap',         defaultPos: { x: 0, y: 8,  w: 8,  h: 8,  minH: 4, isResizable: true } },
+  feargreed:   { title: 'Fear & Greed Index',        defaultPos: { x: 8, y: 8,  w: 4,  h: 8,  minH: 5, isResizable: true } },
+  metrics:     { title: 'Price Metrics',             defaultPos: { x: 0, y: 16, w: 12, h: 4,  minH: 3, isResizable: true } },
+  chart:       { title: 'Interactive Overlay Chart', defaultPos: { x: 0, y: 20, w: 8,  h: 18, minH: 6, isResizable: true } },
+  feed:        { title: 'Live Sentiment Feed',       defaultPos: { x: 8, y: 20, w: 4,  h: 8,  minH: 4, isResizable: true } },
+  orderbook:   { title: 'Order Book Depth',          defaultPos: { x: 8, y: 28, w: 4,  h: 4,  minH: 3, isResizable: true } },
+  technical:   { title: 'Technical Pulse',           defaultPos: { x: 8, y: 32, w: 4,  h: 6,  minH: 4, isResizable: true } },
 }
 
 /** Default 12-column bento grid — mirrors the plan table. */
