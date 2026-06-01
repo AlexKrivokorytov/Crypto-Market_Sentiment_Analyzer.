@@ -7,9 +7,9 @@
  */
 
 import { computed, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import { useAuthStore } from '@/composables/useAuthStore'
 import { usePortfolio } from '@/composables/usePortfolio'
-import { useAssets } from '@/composables/useMarketData'
 import type { RouteAssetId } from '@/types/market'
 import {
   formatPrice,
@@ -22,52 +22,20 @@ const authStore = useAuthStore()
 // ── Queries ─────────────────────────────────────────────────────────────────
 
 const { positions, upsertPosition, deletePosition } = usePortfolio()
-const { data: assets } = useAssets()
 
 // ── Portfolio summary ────────────────────────────────────────────────────────
 
-// Map to fast lookup
-const assetPriceMap = computed(() => {
-  const map: Record<string, number> = {}
-  if (assets.value) {
-    for (const a of assets.value) {
-      map[a.id] = a.price
-    }
-  }
-  return map
-})
-
-const enrichedPositions = computed(() => {
-  return positions.value.map(p => {
-    const current_price = assetPriceMap.value[p.asset_id] || 0
-    const value = p.quantity * current_price
-    const cost = p.quantity * p.avg_buy_price
-    const pnl_usd = value - cost
-    const pnl_pct = cost > 0 ? (pnl_usd / cost) * 100 : 0
-    return {
-      ...p,
-      current_price,
-      value,
-      pnl_usd,
-      pnl_pct
-    }
-  })
-})
-
 const totalValue = computed<number>(() =>
-  enrichedPositions.value.reduce((sum, p) => sum + p.value, 0)
+  positions.value.reduce((sum, p) => sum + p.current_price * p.quantity, 0)
 )
 
 const totalPnlUsd = computed<number>(() =>
-  enrichedPositions.value.reduce((sum, p) => sum + p.pnl_usd, 0)
+  positions.value.reduce((sum, p) => sum + p.pnl_usd, 0)
 )
 
 const totalPnlPct = computed<number>(() => {
-  const costBasis = enrichedPositions.value.reduce(
-    (sum, p) => sum + p.avg_buy_price * p.quantity,
-    0
-  )
-  return costBasis > 0 ? (totalPnlUsd.value / costBasis) * 100 : 0
+  const cost = positions.value.reduce((s, p) => s + p.avg_buy_price * p.quantity, 0)
+  return cost > 0 ? (totalPnlUsd.value / cost) * 100 : 0
 })
 
 // ── Add position modal ───────────────────────────────────────────────────────
@@ -162,12 +130,18 @@ function pnlIcon(value: number) {
       
       <div class="glass-card scanline-overlay p-5 rounded flex flex-col gap-2 relative overflow-hidden group border border-white/5">
         <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider relative z-10">> OPEN_POSITIONS</span>
-        <span class="text-2xl sm:text-3xl font-bold text-slate-100 price-mono tracking-tight relative z-10">{{ enrichedPositions.length }}</span>
+        <span class="text-2xl sm:text-3xl font-bold text-slate-100 price-mono tracking-tight relative z-10">{{ positions.length }}</span>
       </div>
     </section>
 
+    <!-- Show before the empty state -->
+    <div v-if="!authStore.isAuthenticated" class="glass-card flex flex-col items-center justify-center text-center p-12 sm:p-20 rounded border-dashed border-white/20">
+      <p class="text-sm text-slate-300 mb-4">Sign in to sync your portfolio with the server.</p>
+      <RouterLink to="/login" class="inline-flex items-center gap-2 px-5 py-2.5 rounded text-sm font-bold text-black bg-signal hover:bg-signal/90 transition-colors">Sign In</RouterLink>
+    </div>
+
     <!-- Empty State -->
-    <div v-if="!enrichedPositions.length" class="glass-card flex flex-col items-center justify-center text-center p-12 sm:p-20 rounded border-dashed border-white/20">
+    <div v-else-if="!positions.length" class="glass-card flex flex-col items-center justify-center text-center p-12 sm:p-20 rounded border-dashed border-white/20">
       <div class="h-16 w-16 bg-slate-900/50 flex items-center justify-center mb-6 border border-white/10">
         <Briefcase class="h-8 w-8 text-slate-500" />
       </div>
@@ -199,7 +173,7 @@ function pnlIcon(value: number) {
       <!-- Position Rows -->
       <TransitionGroup name="list" tag="div" class="flex flex-col gap-3">
         <div 
-          v-for="pos in enrichedPositions" 
+          v-for="pos in positions" 
           :key="pos.asset_id"
           class="glass-card hover:bg-white/[0.04] p-4 sm:p-0 sm:px-6 sm:py-4 rounded flex flex-col sm:grid sm:grid-cols-12 sm:items-center gap-4 transition-all duration-300 relative group overflow-hidden border border-white/5"
         >
@@ -235,7 +209,7 @@ function pnlIcon(value: number) {
           <div class="col-span-2 flex flex-row sm:flex-col justify-between sm:justify-end items-center sm:items-end gap-1 sm:gap-0 relative z-10">
             <span class="sm:hidden text-[10px] font-bold text-slate-500 uppercase">MARK</span>
             <div class="font-bold price-mono text-slate-100 text-sm sm:text-base">
-              {{ formatCurrency(pos.value) }}
+              {{ formatCurrency(pos.current_price * pos.quantity) }}
             </div>
           </div>
 

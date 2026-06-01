@@ -12,3 +12,9 @@ export const API_WS_BASE = (() => {
   return `${protocol}//${window.location.host}/api/v1`
 })()
 export const API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? 20_000)
+
+export const WS_DEFAULT_CONFIG = {
+  heartbeatInterval: 30000,
+  maxRetries: 5,
+  reconnectDelay: 2000,
+}

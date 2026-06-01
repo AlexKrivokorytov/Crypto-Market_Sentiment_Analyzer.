@@ -101,5 +101,5 @@ router.beforeEach((to) => {
   return true
 })
 
-export { DEFAULT_ASSET, KNOWN_ASSET_IDS }
+export { KNOWN_ASSET_IDS }
 export default router

@@ -30,9 +30,22 @@ const assetId = computed(() => route.params.id as RouteAssetId)
 // Grid Layout Types
 // ──────────────────────────────────────────────────────────────────────────────
 
+/** Map widget IDs to async components. */
+const componentMap = {
+  overview:  MarketOverviewGrid,
+  heatmap:   SentimentHeatmap,
+  feargreed: FearGreedGauge,
+  metrics:   MetricsPanel,
+  chart:     SentimentChart,
+  feed:      LiveFeed,
+  correlation: NewsCorrelationPanel,
+} as const
+
+type WidgetId = keyof typeof componentMap
+
 interface GridWidget {
-  /** Unique widget identifier — must match componentMap keys. */
-  i: 'overview' | 'heatmap' | 'metrics' | 'chart' | 'feed' | 'feargreed'
+  /** Unique widget identifier — dynamically derived from componentMap. */
+  i: WidgetId
   title: string
   visible: boolean
   collapsed: boolean
@@ -49,29 +62,28 @@ interface GridWidget {
 
 const LAYOUT_CACHE_KEY = 'dashboard_grid_layout_v4'
 
+const WIDGET_META: Record<WidgetId, { title: string; defaultPos: Omit<GridWidget, 'i' | 'title' | 'visible' | 'collapsed'> }> = {
+  overview:    { title: 'Market Overview',           defaultPos: { x: 0, y: 0,  w: 12, h: 8,  minH: 6, isResizable: true } },
+  heatmap:     { title: 'Sentiment Heatmap',         defaultPos: { x: 0, y: 8,  w: 8,  h: 6,  minH: 4, isResizable: true } },
+  feargreed:   { title: 'Fear & Greed Index',        defaultPos: { x: 8, y: 8,  w: 4,  h: 6,  minH: 5, isResizable: true } },
+  metrics:     { title: 'Price Metrics',             defaultPos: { x: 0, y: 14, w: 12, h: 4,  minH: 3, isResizable: true } },
+  chart:       { title: 'Interactive Overlay Chart', defaultPos: { x: 0, y: 18, w: 8,  h: 9,  minH: 6, isResizable: true } },
+  feed:        { title: 'Live Sentiment Feed',       defaultPos: { x: 8, y: 18, w: 4,  h: 5,  minH: 4, isResizable: true } },
+  correlation: { title: 'News Correlation',          defaultPos: { x: 8, y: 23, w: 4,  h: 4,  minH: 3, isResizable: true } },
+}
+
 /** Default 12-column bento grid — mirrors the plan table. */
-const defaultGrid: GridWidget[] = [
-  { i: 'overview',  title: 'Market Overview',          visible: true, collapsed: false, x: 0, y: 0,  w: 12, h: 8,  minH: 6, isResizable: true },
-  { i: 'heatmap',   title: 'Sentiment Heatmap',        visible: true, collapsed: false, x: 0, y: 8,  w: 8,  h: 6,  minH: 4, isResizable: true  },
-  { i: 'feargreed', title: 'Fear & Greed Index',       visible: true, collapsed: false, x: 8, y: 8,  w: 4,  h: 6,  minH: 5, isResizable: true },
-  { i: 'metrics',   title: 'Price Metrics',            visible: true, collapsed: false, x: 0, y: 14, w: 12, h: 4,  minH: 3, isResizable: true },
-  { i: 'chart',     title: 'Interactive Overlay Chart', visible: true, collapsed: false, x: 0, y: 18, w: 8,  h: 9,  minH: 6, isResizable: true  },
-  { i: 'feed',      title: 'Live Sentiment Feed',       visible: true, collapsed: false, x: 8, y: 18, w: 4,  h: 9,  minH: 6, isResizable: true  },
-]
+const defaultGrid: GridWidget[] = (Object.keys(WIDGET_META) as WidgetId[]).map((id) => ({
+  i: id,
+  title: WIDGET_META[id].title,
+  visible: true,
+  collapsed: false,
+  ...WIDGET_META[id].defaultPos,
+}))
 
 const gridWidgets = ref<GridWidget[]>([])
 const showSettings = ref(false)
 const searchQuery = ref('')
-
-/** Map widget IDs to async components. */
-const componentMap: Record<string, ReturnType<typeof defineAsyncComponent>> = {
-  overview:  MarketOverviewGrid,
-  heatmap:   SentimentHeatmap,
-  feargreed: FearGreedGauge,
-  metrics:   MetricsPanel,
-  chart:     SentimentChart,
-  feed:      LiveFeed,
-}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Layout Persistence
@@ -306,15 +318,7 @@ function onLayoutUpdated(updatedLayout: Array<{ i: string; x: number; y: number;
               </template>
             </Suspense>
 
-            <!-- News Correlation stacked below Live Feed -->
-            <template v-if="item.i === 'feed'">
-              <Suspense>
-                <NewsCorrelationPanel :asset-id="assetId" class="mt-3" />
-                <template #fallback>
-                  <div class="mt-3 h-32 rounded-2xl animate-pulse bg-white/[0.02]" />
-                </template>
-              </Suspense>
-            </template>
+
           </WidgetWrapper>
         </GridItem>
       </GridLayout>

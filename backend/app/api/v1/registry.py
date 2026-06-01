@@ -18,7 +18,7 @@ async def get_active_assets() -> List[AssetConfig]:
     try:
         return await dynamic_registry.get_active_assets()
     except Exception as exc:
-        logger.error(f"Failed to fetch active assets: {exc}")
+        logger.error("registry_fetch_assets_failed: error=%s", str(exc))
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
@@ -30,5 +30,5 @@ async def get_lexicon() -> LexiconConfig:
     try:
         return await dynamic_registry.get_lexicon()
     except Exception as exc:
-        logger.error(f"Failed to fetch lexicon: {exc}")
+        logger.error("registry_fetch_lexicon_failed: error=%s", str(exc))
         raise HTTPException(status_code=500, detail="Internal server error")

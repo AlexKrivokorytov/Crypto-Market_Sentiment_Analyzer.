@@ -63,6 +63,14 @@ export default {
           DEFAULT: '#6b7280', // gray-500
           glow: 'rgba(107, 114, 128, 0.15)',
         },
+        signal: {
+          DEFAULT: '#00D97E',
+          glow: 'rgba(0, 217, 126, 0.15)',
+        },
+        alarm: {
+          DEFAULT: '#FF3E6C',
+          glow: 'rgba(255, 62, 108, 0.15)',
+        },
 
         // ── Sprint 5 Design System Tokens ──────────────────────────────
         // Gold accent — Fintech/Crypto primary (UI-UX Pro Max: Fintech/Crypto palette)

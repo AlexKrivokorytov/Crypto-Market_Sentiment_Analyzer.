@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/vue-query'
 import { computed } from 'vue'
 import type { Ref } from 'vue'
 import { marketApi } from '../services/api'
-import type { AssetMetrics, HistoricalDataPoint, SentimentArticle, RouteAssetId } from '../types/market'
+import type { AssetMetrics, HistoricalDataPoint, SentimentArticle, RouteAssetId, RegistryAssetConfig } from '../types/market'
 
 
 /**
@@ -23,7 +23,7 @@ export function useAssets() {
  * Used for dynamic UI construction and order preservation.
  */
 export function useRegistryAssets() {
-  return useQuery<any[]>({
+  return useQuery<RegistryAssetConfig[]>({
     queryKey: ['registry', 'assets'],
     queryFn: () => marketApi.getRegistryAssets(),
     staleTime: Infinity,

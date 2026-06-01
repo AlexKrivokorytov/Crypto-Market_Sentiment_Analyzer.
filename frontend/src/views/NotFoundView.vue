@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
 import { TrendingDown, Home } from '@lucide/vue'
-import { DEFAULT_ASSET } from '@/router/index'
+import { DEFAULT_ASSET } from '@/constants/assets'
 </script>
 
 <template>

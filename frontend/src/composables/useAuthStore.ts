@@ -15,6 +15,7 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import { authApi } from '@/services/api'
+import { safeStorage } from '@/utils/storage'
 import type { UserPublic } from '@/types/market'
 
 const TOKEN_KEY = 'access_token'
@@ -32,7 +33,7 @@ export const useAuthStore = defineStore('auth', () => {
   const isAuthenticated = computed<boolean>(() => user.value !== null)
 
   /** The raw JWT string from localStorage, or null if not present. */
-  const token = computed<string | null>(() => localStorage.getItem(TOKEN_KEY))
+  const token = computed<string | null>(() => safeStorage.get(TOKEN_KEY))
 
   // ── Actions ──────────────────────────────────────────────────────────────
 
@@ -43,12 +44,12 @@ export const useAuthStore = defineStore('auth', () => {
    * (expired/invalid token) clears the token silently — no redirect.
    */
   async function restoreSession(): Promise<void> {
-    if (!localStorage.getItem(TOKEN_KEY)) return
+    if (!safeStorage.get(TOKEN_KEY)) return
     try {
       isLoading.value = true
       user.value = await authApi.getMe()
     } catch {
-      localStorage.removeItem(TOKEN_KEY)
+      safeStorage.remove(TOKEN_KEY)
       user.value = null
     } finally {
       isLoading.value = false
@@ -69,7 +70,7 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
     try {
       const response = await authApi.login(email, password)
-      localStorage.setItem(TOKEN_KEY, response.access_token)
+      safeStorage.set(TOKEN_KEY, response.access_token)
       user.value = response.user
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Login failed.'
@@ -107,7 +108,7 @@ export const useAuthStore = defineStore('auth', () => {
    * Does not call a server-side logout endpoint (tokens are stateless).
    */
   function logout(): void {
-    localStorage.removeItem(TOKEN_KEY)
+    safeStorage.remove(TOKEN_KEY)
     user.value = null
     error.value = null
   }

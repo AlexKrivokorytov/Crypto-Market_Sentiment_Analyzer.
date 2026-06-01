@@ -1,36 +1,42 @@
-import { useStorage } from '@vueuse/core'
-import type { RouteAssetId } from '@/types/market'
+import { computed } from 'vue'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/vue-query'
+import { portfolioApi } from '@/services/api'
+import { useAuthStore } from '@/composables/useAuthStore'
+import type { PortfolioPosition } from '@/types/market'
 
-export interface PortfolioPosition {
-  asset_id: RouteAssetId
-  quantity: number
-  avg_buy_price: number
-}
-
-// Client-side portfolio stored in localStorage
 export function usePortfolio() {
-  const positions = useStorage<PortfolioPosition[]>('quant-hud-portfolio', [
-    { asset_id: 'BTC', quantity: 0.15, avg_buy_price: 45000 },
-    { asset_id: 'ETH', quantity: 1.5, avg_buy_price: 2200 },
-  ])
+  const authStore = useAuthStore()
+  const queryClient = useQueryClient()
 
-  function upsertPosition(assetId: RouteAssetId, quantity: number, avgBuyPrice: number) {
-    const existing = positions.value.find(p => p.asset_id === assetId)
-    if (existing) {
-      existing.quantity = quantity
-      existing.avg_buy_price = avgBuyPrice
-    } else {
-      positions.value.push({ asset_id: assetId, quantity, avg_buy_price: avgBuyPrice })
-    }
-  }
+  const { data: positions, isLoading, isError } = useQuery<PortfolioPosition[]>({
+    queryKey: ['portfolio'],
+    queryFn: () => portfolioApi.getPortfolio(),
+    enabled: computed(() => authStore.isAuthenticated),
+    staleTime: 30_000,
+    initialData: [],
+  })
 
-  function deletePosition(assetId: RouteAssetId) {
-    positions.value = positions.value.filter(p => p.asset_id !== assetId)
-  }
+  const upsertMutation = useMutation({
+    mutationFn: ({ assetId, quantity, avgBuyPrice }: {
+      assetId: string; quantity: number; avgBuyPrice: number
+    }) => portfolioApi.upsertPosition(assetId, quantity, avgBuyPrice),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['portfolio'] }),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (assetId: string) => portfolioApi.deletePosition(assetId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['portfolio'] }),
+  })
 
   return {
-    positions,
-    upsertPosition,
-    deletePosition,
+    positions: computed(() => positions.value ?? []),
+    isLoading,
+    isError,
+    isSubmitting: computed(
+      () => upsertMutation.isPending.value || deleteMutation.isPending.value
+    ),
+    upsertPosition: (assetId: string, qty: number, avgBuy: number) =>
+      upsertMutation.mutate({ assetId, quantity: qty, avgBuyPrice: avgBuy }),
+    deletePosition: (assetId: string) => deleteMutation.mutate(assetId),
   }
 }

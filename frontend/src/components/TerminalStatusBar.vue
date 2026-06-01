@@ -10,8 +10,8 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useQuery } from '@tanstack/vue-query'
 import type { AssetMetrics } from '@/types/market'
-
-const API_BASE = import.meta.env.VITE_API_URL ?? ''
+import { marketApi } from '@/services/api'
+import { useBackendConfig } from '@/composables/useMarketData'
 
 const sessionStart = ref(Date.now())
 const uptimeDisplay = ref('00:00:00')
@@ -34,14 +34,12 @@ onUnmounted(() => {
   if (uptimeInterval) clearInterval(uptimeInterval)
 })
 
+const { data: config } = useBackendConfig()
+
 // Pull asset prices from TanStack Query cache (already loaded by dashboard)
 const { data: assets } = useQuery<AssetMetrics[]>({
   queryKey: ['assets'],
-  queryFn: async () => {
-    const resp = await fetch(`${API_BASE}/api/v1/assets`)
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-    return resp.json() as Promise<AssetMetrics[]>
-  },
+  queryFn: () => marketApi.getAssets(),
   staleTime: 1000 * 15,
   refetchInterval: 1000 * 30,
 })
@@ -54,7 +52,6 @@ const statusAssets = computed(() => {
     .slice(0, 3)
 })
 
-const llmModel = import.meta.env.VITE_LLM_MODEL ?? 'openrouter/free'
 </script>
 
 <template>
@@ -116,7 +113,7 @@ const llmModel = import.meta.env.VITE_LLM_MODEL ?? 'openrouter/free'
     <!-- AI Model -->
     <div class="flex items-center gap-1.5 shrink-0 hidden md:flex">
       <span class="text-[9px] text-slate-600 uppercase tracking-widest">AI</span>
-      <span class="text-[9px] text-slate-500 font-semibold">{{ llmModel }}</span>
+      <span class="text-[9px] text-slate-500 font-semibold">{{ config?.llm_model ?? 'openrouter/free' }}</span>
     </div>
 
     <span class="text-slate-700 hidden md:block">|</span>

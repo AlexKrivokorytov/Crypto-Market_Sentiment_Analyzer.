@@ -71,6 +71,7 @@ from backend.app.services.llm import (
     clean_text,
 )
 from backend.app.services.chat import chat_service
+from backend.app.services.parser import _apply_sentiment_to_asset
 
 router = APIRouter()
 logger = logging.getLogger("app")
@@ -397,8 +398,6 @@ async def analyze_article_sentiment_endpoint(
     )
 
     # Reactively apply sentiment shift to asset metrics
-    from backend.app.services.parser import _apply_sentiment_to_asset
-
     await _apply_sentiment_to_asset(
         article["asset_id"], sentiment_data["sentimentScore"]
     )

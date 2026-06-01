@@ -98,8 +98,6 @@ class CryptoHandler(BaseAssetHandler):
             Chronologically ordered list of OHLCVRow objects.
             Returns an empty list if the CoinGecko API is unavailable.
         """
-        from backend.app.services.price_feed import market_data_provider
-
         if not self.coingecko_id:
             logger.warning(
                 "crypto_handler_ohlcv_skip: asset_id=%s coingecko_id=None",

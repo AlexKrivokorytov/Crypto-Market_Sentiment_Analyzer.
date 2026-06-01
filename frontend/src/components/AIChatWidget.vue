@@ -210,7 +210,7 @@ onUnmounted(() => {
   -->
   <div
     class="fixed right-4 z-50 flex flex-col items-end gap-3"
-    style="bottom: max(1.5rem, calc(env(safe-area-inset-bottom, 0px) + 0.75rem));"
+    style="bottom: max(3rem, calc(env(safe-area-inset-bottom, 0px) + 3rem));"
   >
 
     <!-- Chat panel -->

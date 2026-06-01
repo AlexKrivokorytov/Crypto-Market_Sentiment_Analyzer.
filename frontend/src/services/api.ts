@@ -16,6 +16,8 @@ import type {
   SentimentArticle,
   TokenResponse,
   UserPublic,
+  RegistryAssetConfig,
+  LexiconConfig,
 } from '../types/market'
 
 export interface FearGreedData {
@@ -30,6 +32,7 @@ export interface FearGreedData {
 }
 
 import { API_HTTP_BASE, API_TIMEOUT_MS } from '../constants/env'
+import { safeStorage } from '../utils/storage'
 
 const BASE_URL = API_HTTP_BASE
 
@@ -71,7 +74,7 @@ class ApiClient {
    * Issues an HTTP request, injects active tokens, and processes responses.
    */
   public async request<T>(path: string, options: RequestInit = {}): Promise<T> {
-    const token = localStorage.getItem('access_token')
+    const token = safeStorage.get('access_token')
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -194,15 +197,15 @@ export const marketApi = {
   /**
    * Fetches the dynamic registry of active assets from the backend.
    */
-  getRegistryAssets(): Promise<any[]> {
-    return apiClient.request<any[]>('/registry/assets')
+  getRegistryAssets(): Promise<RegistryAssetConfig[]> {
+    return apiClient.request<RegistryAssetConfig[]>('/registry/assets')
   },
 
   /**
    * Fetches the dynamically configured sentiment lexicon from the backend.
    */
-  getLexicon(): Promise<any> {
-    return apiClient.request<any>('/registry/lexicon')
+  getLexicon(): Promise<LexiconConfig> {
+    return apiClient.request<LexiconConfig>('/registry/lexicon')
   },
 
   getConfig(): Promise<{ llm_configured: boolean; llm_model: string }> {

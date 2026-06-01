@@ -11,7 +11,7 @@ import logging
 from typing import Any, Dict, Optional
 
 from bson import ObjectId
-from jose import JWTError, jwt
+from jose import JWTError, jwt  # type: ignore
 
 from backend.app.core.config import settings
 from backend.app.core.database import users_collection

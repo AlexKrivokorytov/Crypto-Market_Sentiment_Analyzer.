@@ -191,8 +191,6 @@ async def lifespan(app_inst: FastAPI) -> AsyncIterator[None]:
             )
 
     if is_render:
-        from backend.app.core.config import settings
-
         if settings.JWT_SECRET_KEY == "CHANGE_ME_IN_PRODUCTION_USE_ENV_VAR":
             log_event(
                 logging.CRITICAL,
@@ -294,13 +292,16 @@ async def correlation_id_middleware(request: Request, call_next: Any) -> Respons
     response.headers["X-Request-ID"] = correlation_id
     return response
 
+
 @app.middleware("http")
 async def security_headers_middleware(request: Request, call_next: Any) -> Response:
     """
     Injects essential security headers into every response.
     """
     response: Response = await call_next(request)
-    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["Strict-Transport-Security"] = (
+        "max-age=31536000; includeSubDomains"
+    )
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-XSS-Protection"] = "1; mode=block"

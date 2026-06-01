@@ -89,3 +89,25 @@ export interface AssetUpdateMessage {
   type: 'asset_update'
   asset: AssetMetrics
 }
+
+export interface RegistryAssetConfig {
+  id: string
+  type: string
+  name: string
+  aliases: string[]
+  coingecko_id: string | null
+  yfinance_ticker: string | null
+  base_price: number
+  volatility: number
+  seed_volume: number
+  seed_sentiment: number
+  is_active: boolean
+  is_in_heatmap: boolean
+  order: number
+}
+
+export interface LexiconConfig {
+  id: string
+  crypto_lexicon: Record<string, number>
+  multi_word_lexicon: Record<string, number>
+}

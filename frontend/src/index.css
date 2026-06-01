@@ -339,10 +339,12 @@
 
 .price-flash-up {
   animation: price-up-pulse 0.8s ease-out forwards;
+  will-change: color, text-shadow;
 }
 
 .price-flash-down {
   animation: price-down-pulse 0.8s ease-out forwards;
+  will-change: color, text-shadow;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

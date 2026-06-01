@@ -28,10 +28,16 @@ from backend.app.core.database import (
     assets_collection,
     articles_collection,
     historical_collection,
+    users_collection,
 )
 from backend.app.handlers.factory import handler_factory
-from backend.app.schemas.market import HistoricalDataPoint
+from backend.app.schemas.market import HistoricalDataPoint, AssetMetrics
 from backend.app.services.websocket_manager import manager as ws_manager
+from backend.app.services.price_feed import market_data_provider
+from backend.app.services.simulator import simulate_price_tick
+from backend.app.services.aggregator import aggregator
+from backend.app.services.llm import analyze_articles_batch, clean_text
+from backend.app.services.sentiment_engine import sentiment_engine
 
 logger = logging.getLogger("app")
 
@@ -180,9 +186,6 @@ async def seed_database_if_empty() -> None:
                 "db_seed: evaluating %d mock articles via Batched LLM...",
                 len(all_seed_articles),
             )
-            from backend.app.services.llm import analyze_articles_batch, clean_text
-            from backend.app.services.sentiment_engine import sentiment_engine
-
             batch_input = []
             for a in all_seed_articles:
                 batch_input.append(
@@ -585,8 +588,6 @@ async def check_alerts_for_asset(
         current_price:     Latest price for the asset.
         current_sentiment: Latest aggregated sentiment score (0–100).
     """
-    from backend.app.core.database import users_collection
-
     cursor = users_collection.find(
         {
             "alerts": {
@@ -652,8 +653,6 @@ async def background_update_loop() -> None:
       3. Appends a new 1H candle and checks alerts.
       4. Broadcasts the updated AssetMetrics via WebSocket.
     """
-    from backend.app.services.price_feed import market_data_provider
-
     while True:
         try:
             await asyncio.sleep(60.0)
@@ -678,8 +677,6 @@ async def background_update_loop() -> None:
                     )
                     # GBM simulator fallback — keeps UI live with mathematically
                     # realistic prices while the primary source recovers.
-                    from backend.app.services.simulator import simulate_price_tick
-
                     asset_doc = await assets_collection.find_one({"id": asset_id})
                     last_known_price: float = float(
                         asset_doc["price"] if asset_doc else handler.base_price
@@ -758,8 +755,6 @@ async def background_update_loop() -> None:
                 )
 
                 # Push tick to the in-memory aggregator
-                from backend.app.services.aggregator import aggregator
-
                 normalized_vader = (sentiment_score - 50.0) / 50.0
                 await aggregator.add_tick(asset_id, tick_price, normalized_vader)
 
@@ -769,8 +764,6 @@ async def background_update_loop() -> None:
                 # Broadcast updated metrics over WebSocket
                 updated_asset = await assets_collection.find_one({"id": asset_id})
                 if updated_asset:
-                    from backend.app.schemas.market import AssetMetrics
-
                     validated = AssetMetrics.model_validate(updated_asset).model_dump()
                     await ws_manager.broadcast_asset_update(asset_id, validated)
 
@@ -796,8 +789,6 @@ async def hourly_aggregation_loop() -> None:
     """
     Background worker that triggers the in-memory aggregator flush once an hour.
     """
-    from backend.app.services.aggregator import aggregator
-
     while True:
         try:
             await asyncio.sleep(3600.0)
