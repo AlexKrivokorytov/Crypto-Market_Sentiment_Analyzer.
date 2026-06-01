@@ -29,54 +29,54 @@
 services:
 
   # ── MongoDB (local dev only — production uses Atlas) ───────────────────────
-  mongodb:
-    image: mongo:6.0
-    container_name: sentiment_mongodb
-    # Port exposed on loopback only — not reachable from other Docker networks
-    ports:
-      - "127.0.0.1:27018:27017"
-    environment:
-      # Credentials for the local container's root user.
-      # Must match MONGODB_URL in backend/.env (authSource=admin).
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-sentiment_admin}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-changeme_dev_only}
-      MONGO_INITDB_DATABASE: sentiment_db
-    volumes:
-      - mongo_data:/data/db
-    networks:
-      - db_network
-    restart: on-failure:5
-    healthcheck:
-      # mongosh available in mongo:6.0; -u/-p required when auth is enabled
-      test:
-        - "CMD"
-        - "mongosh"
-        - "--quiet"
-        - "--username"
-        - "${MONGO_ROOT_USERNAME:-sentiment_admin}"
-        - "--password"
-        - "${MONGO_ROOT_PASSWORD:-changeme_dev_only}"
-        - "--authenticationDatabase"
-        - "admin"
-        - "--eval"
-        - "db.adminCommand('ping').ok"
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 512M
-        reservations:
-          cpus: "0.1"
-          memory: 128M
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
+  # mongodb:
+  #   image: mongo:6.0
+  #   container_name: sentiment_mongodb
+  #   # Port exposed on loopback only — not reachable from other Docker networks
+  #   ports:
+  #     - "127.0.0.1:27018:27017"
+  #   environment:
+  #     # Credentials for the local container's root user.
+  #     # Must match MONGODB_URL in backend/.env (authSource=admin).
+  #     MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-sentiment_admin}
+  #     MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-changeme_dev_only}
+  #     MONGO_INITDB_DATABASE: sentiment_db
+  #   volumes:
+  #     - mongo_data:/data/db
+  #   networks:
+  #     - db_network
+  #   restart: on-failure:5
+  #   healthcheck:
+  #     # mongosh available in mongo:6.0; -u/-p required when auth is enabled
+  #     test:
+  #       - "CMD"
+  #       - "mongosh"
+  #       - "--quiet"
+  #       - "--username"
+  #       - "${MONGO_ROOT_USERNAME:-sentiment_admin}"
+  #       - "--password"
+  #       - "${MONGO_ROOT_PASSWORD:-changeme_dev_only}"
+  #       - "--authenticationDatabase"
+  #       - "admin"
+  #       - "--eval"
+  #       - "db.adminCommand('ping').ok"
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #     start_period: 30s
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: "0.5"
+  #         memory: 512M
+  #       reservations:
+  #         cpus: "0.1"
+  #         memory: 128M
+  #   logging:
+  #     driver: json-file
+  #     options:
+  #       max-size: "10m"
+  #       max-file: "3"
 
   # ── FastAPI backend ─────────────────────────────────────────────────────────
   backend:
@@ -92,17 +92,18 @@ services:
       # Override MONGODB_URL to point at the containerised MongoDB with auth.
       # Uses Docker service-name 'mongodb' for DNS resolution within db_network.
       # For production on Render, set MONGODB_URL to your Atlas SRV string instead.
-      MONGODB_URL: "mongodb://${MONGO_ROOT_USERNAME:-sentiment_admin}:${MONGO_ROOT_PASSWORD:-changeme_dev_only}@mongodb:27017/sentiment_db?authSource=admin"
+      # MONGODB_URL: "mongodb://${MONGO_ROOT_USERNAME:-sentiment_admin}:${MONGO_ROOT_PASSWORD:-changeme_dev_only}@mongodb:27017/sentiment_db?authSource=admin"
       # Allow host Ollama (via extra_hosts) for LLM integration on dev machines
+      {}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
       - app_network
-      - db_network
+      # - db_network
     restart: on-failure:5
-    depends_on:
-      mongodb:
-        condition: service_healthy
+    # depends_on:
+    #   mongodb:
+    #     condition: service_healthy
     healthcheck:
       test:
         - "CMD-SHELL"
@@ -165,12 +166,12 @@ networks:
 
   # Isolated backend bridge — backend ↔ mongodb only
   # internal: true means no external routing is possible for this network
-  db_network:
-    driver: bridge
-    internal: true
+  # db_network:
+  #   driver: bridge
+  #   internal: true
 
 # ── Volumes ──────────────────────────────────────────────────────────────────
-volumes:
-  # Named volume keeps MongoDB data across container restarts
-  mongo_data:
-    driver: local
+# volumes:
+#   # Named volume keeps MongoDB data across container restarts
+#   mongo_data:
+#     driver: local

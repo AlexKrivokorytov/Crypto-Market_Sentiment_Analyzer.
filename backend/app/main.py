@@ -294,6 +294,28 @@ async def correlation_id_middleware(request: Request, call_next: Any) -> Respons
     response.headers["X-Request-ID"] = correlation_id
     return response
 
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next: Any) -> Response:
+    """
+    Injects essential security headers into every response.
+    """
+    response: Response = await call_next(request)
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    # Basic CSP: allow self, and standard WebSockets/API calls.
+    # Note: If more external domains are needed for images/scripts, they must be added here.
+    csp = (
+        "default-src 'self'; "
+        "connect-src 'self' https://api.coingecko.com wss: ws: https://toncenter.com; "
+        "img-src 'self' data: https:; "
+        "style-src 'self' 'unsafe-inline'; "
+        "script-src 'self' 'unsafe-eval' 'unsafe-inline';"
+    )
+    response.headers["Content-Security-Policy"] = csp
+    return response
+
 
 @app.middleware("http")
 async def log_requests_middleware(request: Request, call_next: Any) -> Response:

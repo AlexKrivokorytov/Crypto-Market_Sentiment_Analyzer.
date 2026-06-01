@@ -5,9 +5,10 @@
  * On successful registration auto-logs in and redirects to the dashboard.
  */
 
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/composables/useAuthStore'
+import { CheckCircle2, Circle } from '@lucide/vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -18,6 +19,10 @@ const confirmPassword = ref('')
 const displayName = ref('')
 const submitting = ref(false)
 const localError = ref<string | null>(null)
+
+const hasMinLength = computed(() => password.value.length >= 8)
+const hasLetter = computed(() => /[a-zA-Z]/.test(password.value))
+const hasNumber = computed(() => /[0-9]/.test(password.value))
 
 async function handleSubmit(): Promise<void> {
   localError.value = null
@@ -30,8 +35,8 @@ async function handleSubmit(): Promise<void> {
     localError.value = 'Passwords do not match.'
     return
   }
-  if (password.value.length < 8) {
-    localError.value = 'Password must be at least 8 characters.'
+  if (!hasMinLength.value || !hasLetter.value || !hasNumber.value) {
+    localError.value = 'Please meet all password requirements.'
     return
   }
 
@@ -124,6 +129,23 @@ async function handleSubmit(): Promise<void> {
             :disabled="submitting"
             required
           />
+          <ul class="password-rules" aria-live="polite">
+            <li :class="{ met: hasMinLength }">
+              <CheckCircle2 v-if="hasMinLength" class="rule-icon" />
+              <Circle v-else class="rule-icon empty" />
+              At least 8 characters
+            </li>
+            <li :class="{ met: hasLetter }">
+              <CheckCircle2 v-if="hasLetter" class="rule-icon" />
+              <Circle v-else class="rule-icon empty" />
+              Contains a letter
+            </li>
+            <li :class="{ met: hasNumber }">
+              <CheckCircle2 v-if="hasNumber" class="rule-icon" />
+              <Circle v-else class="rule-icon empty" />
+              Contains a number
+            </li>
+          </ul>
         </div>
 
         <div class="field-group">
@@ -279,9 +301,36 @@ async function handleSubmit(): Promise<void> {
   color: #f87171;
   background: rgba(248, 113, 113, 0.1);
   border: 1px solid rgba(248, 113, 113, 0.2);
+  border: 1px solid rgba(248, 113, 113, 0.2);
   border-radius: 0.5rem;
   padding: 0.625rem 0.875rem;
   margin: 0;
+}
+.password-rules {
+  list-style: none;
+  padding: 0;
+  margin: 0.375rem 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.password-rules li {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  color: #64748b;
+  transition: color 0.2s;
+}
+.password-rules li.met {
+  color: #10b981;
+}
+.rule-icon {
+  width: 14px;
+  height: 14px;
+}
+.rule-icon.empty {
+  opacity: 0.5;
 }
 .btn-primary {
   width: 100%;
