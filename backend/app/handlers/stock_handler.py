@@ -12,7 +12,7 @@ import asyncio
 import logging
 from typing import Any
 
-import yfinance as yf  # type: ignore[import-untyped]
+import yfinance as yf
 
 from backend.app.handlers.base import BaseAssetHandler, OHLCVRow, PriceTick
 

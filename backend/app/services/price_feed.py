@@ -144,7 +144,7 @@ class MarketDataProvider:
         return response
 
     def _fetch_aapl_sync(self) -> Dict[str, float]:
-        import yfinance as yf  # type: ignore[import-untyped]
+        import yfinance as yf  # noqa: PLC0415
 
         ticker = yf.Ticker("AAPL")
         fast = ticker.fast_info

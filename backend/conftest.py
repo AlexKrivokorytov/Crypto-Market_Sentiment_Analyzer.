@@ -7,7 +7,7 @@ import pytest
 
 
 @pytest.fixture(scope="session")
-def anyio_backend():
+def anyio_backend() -> str:
     """
     Configures the async backend for tests using anyio.
     This replaces the deprecated pytest-asyncio strict mode.

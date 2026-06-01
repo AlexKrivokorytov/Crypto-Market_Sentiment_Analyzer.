@@ -152,6 +152,16 @@ export const apiClient = new ApiClient(BASE_URL)
 // Market data API (public)
 // ─────────────────────────────────────────────────────────────────────────────
 
+export interface ChatRequest {
+  message: string
+  asset_id?: string
+}
+
+export interface ChatResponse {
+  reply: string
+  fallback: boolean
+}
+
 export const marketApi = {
   getAssets(): Promise<AssetMetrics[]> {
     return apiClient.request<AssetMetrics[]>('/assets')
@@ -204,7 +214,28 @@ export const marketApi = {
       method: 'POST',
     })
   },
+
+  /**
+   * Sends a user message to the AI market assistant and returns the LLM reply.
+   *
+   * Uses the centralized ApiClient so timeout, auth headers, and error
+   * interceptors are applied automatically. The backend rate-limits this to
+   * 4 requests per minute; the frontend enforces an additional 30s client-side
+   * cooldown to give the user clear feedback before the server rejects them.
+   *
+   * @param message  - The user's question (1-500 chars).
+   * @param assetId  - Optional asset filter (e.g. 'BTC').
+   * @returns Resolved ChatResponse with `reply` and `fallback` flag.
+   */
+  sendChatMessage(message: string, assetId?: string): Promise<ChatResponse> {
+    const body: ChatRequest = { message, ...(assetId ? { asset_id: assetId } : {}) }
+    return apiClient.request<ChatResponse>('/chat', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  },
 }
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Auth API

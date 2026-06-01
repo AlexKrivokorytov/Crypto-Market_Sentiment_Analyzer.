@@ -4,7 +4,64 @@ Pydantic schemas for the Market Sentiment Analyzer API.
 
 import datetime
 from typing import Any, List, Optional
-from pydantic import BaseModel, Field, ConfigDict, model_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, model_validator
+
+
+# ── AI Chat schemas ───────────────────────────────────────────────────────────
+
+
+class ChatRequest(BaseModel):
+    """
+    Validated request body for the /chat endpoint.
+
+    Fields:
+        message:  The user's question or statement (1-500 characters).
+        asset_id: Optional uppercase ticker filter (e.g. 'BTC'). Defaults to ''.
+    """
+
+    message: str = Field(
+        ...,
+        min_length=1,
+        max_length=500,
+        description="The user's market question (1-500 chars)",
+    )
+    asset_id: str = Field(
+        "",
+        max_length=20,
+        description="Optional asset ticker to scope the context (e.g. 'BTC')",
+    )
+
+    @field_validator("asset_id", mode="before")
+    @classmethod
+    def normalise_asset_id(cls, v: Any) -> str:
+        """Strips whitespace and uppercases the asset_id, returning '' when None."""
+        if v is None:
+            return ""
+        return str(v).strip().upper()
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ChatResponse(BaseModel):
+    """
+    Response payload returned by the /chat endpoint.
+
+    Fields:
+        reply:    The AI-generated text reply.
+        fallback: True when the reply was produced by a local fallback
+                  (LLM not configured or all models failed).
+    """
+
+    reply: str = Field(..., description="AI-generated market analysis reply")
+    fallback: bool = Field(
+        False,
+        description="True when the reply is a fallback (LLM unavailable)",
+    )
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ── Market data schemas ────────────────────────────────────────────────────────
 
 
 class OnChainMetrics(BaseModel):

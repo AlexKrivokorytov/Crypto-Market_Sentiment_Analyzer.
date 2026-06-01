@@ -78,7 +78,7 @@ def _parse_article_sync(url: str) -> Optional[str]:
     """
     try:
         # newspaper4k is an optional dependency; fail gracefully if not installed
-        import newspaper  # type: ignore[import-not-found]
+        import newspaper
 
         article = newspaper.Article(url)
         article.download()
